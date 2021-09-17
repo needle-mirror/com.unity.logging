@@ -1,0 +1,34 @@
+{
+    "name": "Unity.Logging",
+    "rootNamespace": "",
+    "references": [
+        "Unity.Burst",
+        "Unity.Collections",
+        "Unity.Jobs"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": true,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "name": "Unity",
+            "expression": "2021.2.8",
+            "define": "USE_BASELIB"
+        },
+        {
+            "name": "Unity",
+            "expression": "2021.2.8",
+            "define": "USE_BASELIB_FILEIO"
+        },
+        {
+            "name": "Unity",
+            "expression": "[2020.3.26,2020.3.99]",
+            "define": "USE_BASELIB"
+        }
+    ],
+    "noEngineReferences": false
+}

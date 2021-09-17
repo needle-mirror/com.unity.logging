@@ -1,0 +1,35 @@
+{
+  "name": "com.unity.logging",
+  "displayName": "Unity Logging",
+  "version": "0.50.0-preview.13",
+  "unity": "2020.3",
+  "unityRelease": "0f1",
+  "dependencies": {
+    "com.unity.burst": "1.6.3",
+    "com.unity.jobs": "0.50.0-preview.8",
+    "com.unity.roslyn": "0.2.1-preview",
+    "com.unity.nuget.newtonsoft-json": "2.0.2",
+    "com.unity.test-framework.performance": "2.6.0-preview"
+  },
+  "description": "The Logging package provides interfaces for creating and processing runtime events and logging output.",
+  "keywords": [
+    "dots",
+    "logging",
+    "unity"
+  ],
+  "upmCi": {
+    "footprint": "0f4ce38548e575a858cd86a5023b76700386f09f"
+  },
+  "repository": {
+    "url": "https://github.cds.internal.unity3d.com/unity/dots.git",
+    "type": "git",
+    "revision": "98fe2a0bd0b54eca05023a916eec76b5fa685f29"
+  },
+  "samples": [
+    {
+      "displayName": "Logging Sample",
+      "description": "Simple Sample using a system to initialize and use logging",
+      "path": "Samples~/LoggingSample"
+    }
+  ]
+}

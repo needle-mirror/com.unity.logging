@@ -1,0 +1,5 @@
+{
+	"displayName":"Logging Sample",
+	"description": "Simple Sample using a system to initialize and use logging",
+	"createSeparatePackage": false
+}

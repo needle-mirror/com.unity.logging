@@ -1,0 +1,22 @@
+apiRules:
+  - exclude:
+      uidRegex: Tests$
+      type: Namespace
+  - exclude:
+      uidRegex: Tests.DOTSRuntime$
+      type: Namespace
+  - exclude:
+      uidRegex: ^Global Namespace.*
+      type: Namespace
+  - exclude:
+      uidRegex: ^LoggingCommon$
+      type: Namespace
+  - exclude:
+      uidRegex: ^MainLoggingGenerator.*
+      type: Namespace
+  - exclude:
+      uidRegex: ^SourceGenerator.*
+      type: Namespace
+  - exclude:
+      uidRegex: ^Samples$
+      type: Namespace
