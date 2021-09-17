@@ -1,10 +1,4 @@
-//#define USE_BASELIB
-//#define USE_NATIVE_TIME
-// if nothing is defined - time is just an atomic counter
-
 using System;
-using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -14,7 +8,9 @@ using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine.Assertions;
 
 #if USE_BASELIB
-using Unity.Baselib.LowLevel;
+using TimeStampManager = Unity.Logging.Internal.TimeStampManagerBaselib;
+#else
+using TimeStampManager = Unity.Logging.Internal.TimeStampManagerManaged;
 #endif
 
 namespace Unity.Logging.Internal
@@ -82,79 +78,6 @@ namespace Unity.Logging.Internal
             return deltaNanoseconds / 1000000;
         }
 
-#if USE_NATIVE_TIME
-        [DllImport("lib_unity_logging", EntryPoint = "GetTimeStamp")]
-        static extern unsafe long GetTimeStampNative();
-
-        [DllImport("lib_unity_logging", EntryPoint = "GetFormattedTimeStampString")]
-        static extern unsafe int GetFormattedTimeStampStringNative(long timestamp, byte* buffer, int bufferSize);
-
-        [DllImport("lib_unity_logging", EntryPoint = "GetFormattedTimeStampStringForFileName")]
-        static extern unsafe int GetFormattedTimeStampStringForFileNameNative(long timestamp, byte* buffer, int bufferSize);
-
-        /// <summary>
-        /// Returns current UTC timestamp
-        /// </summary>
-        /// <returns>UTC timestamp</returns>
-        public static long GetTimeStamp()
-        {
-            if (s_GetTimestampHandler.Data.IsCreated)
-            {
-                return s_GetTimestampHandler.Data.Invoke();
-            }
-            else
-            {
-                // default
-                return GetTimeStampNative();
-            }
-        }
-
-        /// <summary>
-        /// Writes human-readable timestamp representation into buffer
-        /// </summary>
-        /// <param name="timestamp">Timestamp to write</param>
-        /// <param name="buffer">Buffer to write to</param>
-        /// <param name="bufferSize">Size of the buffer</param>
-        /// <returns>Length written to the buffer</returns>
-        public static unsafe int GetFormattedTimeStampString(long timestamp, ref UnsafeText messageOutput)
-        {
-            FixedString64Bytes res = "";
-            var buffer = messageOutput.GetUnsafePtr();
-            var bufferSize = FixedString64Bytes.UTF8MaxLengthInBytes;
-            res.Length = bufferSize;
-
-            var written = GetFormattedTimeStampStringNative(timestamp, buffer, bufferSize);
-            if (written > 0)
-            {
-                res.Length = written;
-                messageOutput.Append(res);
-            }
-
-            return written;
-        }
-
-        public static FixedString64Bytes GetFormattedTimeStampStringForFileName(long timestamp)
-        {
-            FixedString64Bytes res = "";
-            var buffer = messageOutput.GetUnsafePtr();
-            var bufferSize = FixedString64Bytes.UTF8MaxLengthInBytes;
-            res.Length = bufferSize;
-
-            var written = GetFormattedTimeStampStringForFileNameNative(timestamp, buffer, bufferSize);
-            if (written > 0)
-            {
-                res.Length = written;
-                return res;
-            }
-
-            return "";
-        }
-
-#else
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate long CaptureTimestampDelegate();
-
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         internal delegate int ToUnsafeTextTimestampDelegate(long timestamp, ref UnsafeText result);
 
@@ -162,12 +85,8 @@ namespace Unity.Logging.Internal
         internal delegate void ToFixedStringFileNameDelegate(long timestamp, ref FixedString64Bytes result);
 
         // make sure delegates are not collected by GC
-        private static CaptureTimestampDelegate s_CaptureDelegate;
         private static ToUnsafeTextTimestampDelegate s_ToUnsafeTextDelegate;
         private static ToFixedStringFileNameDelegate s_ToFixedStringFileNameDelegate;
-
-        private struct CaptureTimestampDelegateKey {}
-        internal static readonly SharedStatic<FunctionPointer<CaptureTimestampDelegate>> s_CaptureMethod = SharedStatic<FunctionPointer<CaptureTimestampDelegate>>.GetOrCreate<FunctionPointer<CaptureTimestampDelegate>, CaptureTimestampDelegateKey>(16);
 
         private struct ToUnsafeTextTimestampDelegateKey {}
         internal static readonly SharedStatic<FunctionPointer<ToUnsafeTextTimestampDelegate>> s_ToUnsafeTextMethod = SharedStatic<FunctionPointer<ToUnsafeTextTimestampDelegate>>.GetOrCreate<FunctionPointer<ToUnsafeTextTimestampDelegate>, ToUnsafeTextTimestampDelegateKey>(16);
@@ -177,8 +96,6 @@ namespace Unity.Logging.Internal
 
         private static byte s_Initialized = 0;
 
-        private static Stopwatch s_Stopwatch;
-        private static DateTime s_StopwatchStartTime;
 
         /// <summary>
         /// Default Timestamp string format
@@ -227,24 +144,15 @@ namespace Unity.Logging.Internal
 
             s_Initialized = 1;
 
-            s_CaptureDelegate = CaptureDateTimeUTCNanoseconds;
+            TimeStampManager.Initialize();
+
             s_ToUnsafeTextDelegate = ToUnsafeTextTimeUTC;
             s_ToFixedStringFileNameDelegate = ToFixedStringFileName;
 
-            s_Stopwatch = new Stopwatch();
-            s_StopwatchStartTime = DateTime.UtcNow;
-            s_Stopwatch.Restart();
-
-            s_CaptureMethod.Data = new FunctionPointer<CaptureTimestampDelegate>(Marshal.GetFunctionPointerForDelegate(s_CaptureDelegate));
             s_ToUnsafeTextMethod.Data = new FunctionPointer<ToUnsafeTextTimestampDelegate>(Marshal.GetFunctionPointerForDelegate(s_ToUnsafeTextDelegate));
             s_ToFixedStringFileNameMethod.Data = new FunctionPointer<ToFixedStringFileNameDelegate>(Marshal.GetFunctionPointerForDelegate(s_ToFixedStringFileNameDelegate));
         }
 
-        [AOT.MonoPInvokeCallback(typeof(CaptureTimestampDelegate))]
-        private static long CaptureDateTimeUTCNanoseconds()
-        {
-            return DateTimeTicksToNanosec( s_StopwatchStartTime.Add(s_Stopwatch.Elapsed).Ticks );
-        }
 
         [AOT.MonoPInvokeCallback(typeof(ToUnsafeTextTimestampDelegateKey))]
         private static int ToUnsafeTextTimeUTC(long timestampUTCNanoseconds, ref UnsafeText result)
@@ -273,18 +181,18 @@ namespace Unity.Logging.Internal
         {
             if (s_GetTimestampHandler.Data.IsCreated)
             {
+#if UNITY_2021_2_OR_NEWER // C# 9 support, unmanaged delegates - gc alloc free way to call FunctionPointer
+                unsafe
+                {
+                    return ((delegate * unmanaged[Cdecl] <long>)s_GetTimestampHandler.Data.Value)();
+                }
+#else
                 return s_GetTimestampHandler.Data.Invoke();
+#endif
+
             }
 
-#if USE_BASELIB
-            var ratio = Binding.Baselib_Timer_GetTicksToNanosecondsConversionRatio();
-            var rate = (double)ratio.ticksToNanosecondsNumerator / ratio.ticksToNanosecondsDenominator;
-            
-            var tick = Binding.Baselib_Timer_GetHighPrecisionTimerTicks();
-            return (long)(tick * rate);
-#else
-            return s_CaptureMethod.Data.Invoke();
-#endif
+            return TimeStampManager.GetTimeStamp();
         }
 
         /// <summary>
@@ -309,6 +217,5 @@ namespace Unity.Logging.Internal
             s_ToFixedStringFileNameMethod.Data.Invoke(timestamp, ref res);
             return res;
         }
-#endif
     }
 }

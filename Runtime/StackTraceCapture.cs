@@ -79,7 +79,6 @@ namespace Unity.Logging.Internal
         {
             using var marker = k_StackTraceToString.Auto();
 
-            result.Clear();
             if (StackTraceData.NeedFileInfo)
             {
                 data.AppendToString(ref result);

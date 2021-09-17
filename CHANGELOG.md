@@ -4,7 +4,7 @@
 
 ### Added
 
-* Customizable timestamp support. 
+* Customizable timestamp support.
 * Stacktrace support. .net core and ns20 have much faster stack traces.
 * Logger API to be able to Add Sinks after creation
 * OnNewLoggerCreated and CallForEveryLogger for LoggerManager
@@ -26,6 +26,8 @@
 * Documentation and samples updated
 * MaximumPayloadSize is increased to 32768
 * All memory allocations are aligned to 8 bytes
+* MaximumPayloadSize is increased to 1024 * 32
+* Default and max buffer capacity reduced
 
 ### Deprecated
 
@@ -41,8 +43,14 @@
 * Arm64 crash fix
 * Race condition fixed, new locking mechanism implemented
 * Timestamps precision improved significantly, so messages are sorted correctly
+* Timestamp stability improved
+* Compatibility with Unity 2021 improved
+* Incorrect timestamp fixed
+* Bug with stacktrace for the text loggers
 
 ### Security
+
+
 
 
 ## [0.4.0-preview.1] - 2021-05-05

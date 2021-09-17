@@ -349,11 +349,7 @@ namespace Unity.Logging.Sinks
             {
                 var alignOf = UnsafeUtility.AlignOf<State>();
                 var sizeOf = sizeof(State);
-#if UNITY_DOTSRUNTIME
                 m_State = (State*)UnsafeUtility.Malloc(sizeOf, alignOf, Allocator.Persistent);
-#else
-                m_State = (State*)UnsafeUtility.MallocTracked(sizeOf, alignOf, Allocator.Persistent, 0);
-#endif
                 UnsafeUtility.MemClear(m_State, sizeOf);
 
                 m_State->prefix = prefix;
@@ -483,11 +479,7 @@ namespace Unity.Logging.Sinks
                     CloseFile();
                 }
 
-#if UNITY_DOTSRUNTIME
                 UnsafeUtility.Free(m_State, Allocator.Persistent);
-#else
-                UnsafeUtility.FreeTracked(m_State, Allocator.Persistent);
-#endif
                 m_State = null;
             }
 
