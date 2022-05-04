@@ -384,7 +384,7 @@ namespace Unity.Logging
             m_UpdateLock = new SpinLockReadWrite(Allocator.Persistent);
 
             // Hashmap Capacity is the number of individual Payload buffers that must be locked simultaneously
-            m_LockedPayloads = new UnsafeHashMap<PayloadHandle, PayloadBufferLockData>(InitialBufferLockMapCapacity, Allocator.Persistent);
+            m_LockedPayloads = new UnsafeParallelHashMap<PayloadHandle, PayloadBufferLockData>(InitialBufferLockMapCapacity, Allocator.Persistent);
             m_PayloadLockSync = new SpinLockReadWrite(Allocator.Persistent);
             m_PayloadReleaseDeferredListLockSync = new SpinLockExclusive(Allocator.Persistent);
 
@@ -1349,7 +1349,7 @@ namespace Unity.Logging
 
         private SpinLockReadWrite           m_UpdateLock;
 
-        private UnsafeHashMap<PayloadHandle, PayloadBufferLockData> m_LockedPayloads;
+        private UnsafeParallelHashMap<PayloadHandle, PayloadBufferLockData> m_LockedPayloads;
         private SpinLockReadWrite           m_PayloadLockSync;
         private SpinLockExclusive           m_PayloadReleaseDeferredListLockSync;
         private uint                        m_OverflowResizeFence;

@@ -566,7 +566,7 @@ namespace Unity.Logging
             var done = false;
             var success = true;
             var firstArg = true;
-            var hashName = new NativeHashSet<FixedString512Bytes>(128, Allocator.Temp);
+            var hashName = new NativeParallelHashSet<FixedString512Bytes>(128, Allocator.Temp);
             do
             {
                 var result = FindNextParseStringSegment(in rawMsgBuffer, in rawMsgBufferLength, ref currMsgSegment, out var currArgSlot);
@@ -651,7 +651,7 @@ namespace Unity.Logging
                     success = false;
             }
 
-            static bool WriteProperty(ref UnsafeText jsonOutput, ref FixedString512Bytes jsonName, ref UnsafeText jsonVal, ref NativeHashSet<FixedString512Bytes> hashName, ref bool firstArg)
+            static bool WriteProperty(ref UnsafeText jsonOutput, ref FixedString512Bytes jsonName, ref UnsafeText jsonVal, ref NativeParallelHashSet<FixedString512Bytes> hashName, ref bool firstArg)
             {
                 if (hashName.Add(jsonName))
                 {

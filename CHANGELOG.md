@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.51.0] - 2022-05-04
+
+### Changed
+
+* Dependencies
+    * Burst 1.6.4
+    * Jobs 0.51.0
+
 ## [0.50.0] - 2021-09-17
 
 ### Added

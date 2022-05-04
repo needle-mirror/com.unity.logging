@@ -1,15 +1,15 @@
 {
   "name": "com.unity.logging",
   "displayName": "Unity Logging",
-  "version": "0.50.0-preview.32",
+  "version": "0.51.0-preview.32",
   "unity": "2020.3",
   "unityRelease": "0f1",
   "dependencies": {
-    "com.unity.burst": "1.6.3",
-    "com.unity.jobs": "0.50.0-preview.9",
-    "com.unity.roslyn": "0.2.1-preview",
+    "com.unity.burst": "1.6.4",
+    "com.unity.jobs": "0.51.0-preview.32",
+    "com.unity.roslyn": "0.2.2-preview",
     "com.unity.nuget.newtonsoft-json": "2.0.2",
-    "com.unity.test-framework.performance": "2.6.0-preview"
+    "com.unity.test-framework.performance": "2.8.0-preview"
   },
   "description": "The Logging package provides interfaces for creating and processing runtime events and logging output.",
   "keywords": [
@@ -18,15 +18,15 @@
     "unity"
   ],
   "upm": {
-    "changelog": "### Added\n\n* Customizable timestamp support.\n* Stacktrace support. .net core and ns20 have much faster stack traces.\n* Logger API to be able to Add Sinks after creation\n* OnNewLoggerCreated and CallForEveryLogger for LoggerManager\n* Ability to change min logging level in runtime\n* Test StringSink and UnityDebugLogSink added\n* Tests for burst compatibility added\n* USE_BASELIB define is in use for Unity 2020.3.26+ and 2021.2.8+\n* USE_BASELIB_FILEIO define is in use for Unity 2021 where it was added to the baselib\n* SelfLog FailedToAllocatePayloadBecauseOfItsSize message\n* Il2CppSetOption checks disabled on perf critical code\n* AggressiveInlining on perf critical code\n\n### Changed\n\n* Better error reporting from source generators\n* Initialize call for Sinks doesn't require LoggerConfig\n* Better Log call detection in the source generators\n* il2cpp issue about missing MonoPInvokeCallback is fixed.\n* Documentation and samples updated\n* MaximumPayloadSize is increased to 32768\n* All memory allocations are aligned to 8 bytes\n* MaximumPayloadSize is increased to 1024 * 32\n* Default and max buffer capacity reduced\n\n### Deprecated\n\n\n### Removed\n\n\n### Fixed\n\n* Workaround for Burst bug: DST-548\n* Baselib File sink fixed\n* Tests issues with il2cpp\n* Arm64 crash fix\n* Race condition fixed, new locking mechanism implemented\n* Timestamps precision improved significantly, so messages are sorted correctly\n* Timestamp stability improved\n* Compatibility with Unity 2021 improved\n* Incorrect timestamp fixed\n* Bug with stacktrace for the text loggers\n\n### Security"
+    "changelog": "### Changed\n\n* Dependencies\n    * Burst 1.6.4\n    * Jobs 0.51.0"
   },
   "upmCi": {
-    "footprint": "35c103e522409bb055dde0a4f8ec71f29313bd8b"
+    "footprint": "f83fc76386b992fa1f4714eb829e01c01a9df638"
   },
   "repository": {
     "url": "https://github.cds.internal.unity3d.com/unity/dots.git",
     "type": "git",
-    "revision": "f510d2cf044b48696ac6e43c591f2fb031f46fca"
+    "revision": "469d2b30300a7ff2c2b15f72ee8613e374c37b63"
   },
   "samples": [
     {
