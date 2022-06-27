@@ -1,12 +1,12 @@
 {
   "name": "com.unity.logging",
   "displayName": "Unity Logging",
-  "version": "0.51.0-preview.32",
+  "version": "0.51.1-preview.21",
   "unity": "2020.3",
   "unityRelease": "0f1",
   "dependencies": {
     "com.unity.burst": "1.6.4",
-    "com.unity.jobs": "0.51.0-preview.32",
+    "com.unity.collections": "1.4.0",
     "com.unity.roslyn": "0.2.2-preview",
     "com.unity.nuget.newtonsoft-json": "2.0.2",
     "com.unity.test-framework.performance": "2.8.0-preview"
@@ -18,15 +18,15 @@
     "unity"
   ],
   "upm": {
-    "changelog": "### Changed\n\n* Dependencies\n    * Burst 1.6.4\n    * Jobs 0.51.0"
+    "changelog": "### Changed\n\n* Updated `com.unity.collections` to version `1.4.0`"
   },
   "upmCi": {
-    "footprint": "f83fc76386b992fa1f4714eb829e01c01a9df638"
+    "footprint": "5e220fbdb1d2a72bef047564ef88b070e7ab01cd"
   },
   "repository": {
     "url": "https://github.cds.internal.unity3d.com/unity/dots.git",
     "type": "git",
-    "revision": "469d2b30300a7ff2c2b15f72ee8613e374c37b63"
+    "revision": "063a98897b40805f53b859bb426ce664229d0c00"
   },
   "samples": [
     {
