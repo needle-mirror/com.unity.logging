@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using LoggingCommon;
 using Microsoft.CodeAnalysis;
@@ -6,96 +7,122 @@ using SourceGenerator.Logging.Declarations;
 
 namespace SourceGenerator.Logging
 {
-    class LogParserEmitter
+    internal static class LogParserEmitter
     {
-        private LogParserEmitter()
-        {
-        }
-
         public static StringBuilder Emit(in GeneratorExecutionContext context, in LogStructureTypesData structData, ulong assemblyHash)
         {
             using var _ = new Profiler.Auto("LogParserEmitter.Emit");
 
-            var emitter = new LogParserEmitter
-            {
-                m_StructData = structData
-            };
-
             var sb = new StringBuilder();
-            sb.Append(EmitStrings.SourceFileHeader);
-
-            var isBursted = true;
-
             var uniquePostfix = Common.CreateUniqueCompilableString();
 
-            sb.AppendFormat(EmitStrings.TextLoggerStructureParserEnclosure,
-                emitter.EmitTextLogParserDefinition(uniquePostfix),
-                uniquePostfix,
-                isBursted ? "true" : "false",
-                $"{assemblyHash:X4}");
+            sb.Append($@"{EmitStrings.SourceFileHeader}
+{EmitStrings.SourceFileHeaderIncludes}
 
-            sb.AppendLine(EmitStrings.SourceFileFooter);
+namespace Unity.Logging
+{{
+    {EmitStrings.BurstCompileAttr}
+    internal struct TextLoggerParserOutputHandlers{assemblyHash:X4}
+    {{
+        public static IntPtr HandlerToken;
+
+        internal static void RegisterTextLoggerParserOutputHandlers()
+        {{
+            HandlerToken = LogWriterUtils.AddOutputHandler(WriteContextFormattedOutput{uniquePostfix}, true);
+        }}
+
+        {EmitStrings.BurstCompileAttr}
+        [AOT.MonoPInvokeCallback(typeof(Unity.Logging.LogWriterUtils.OutputWriterHandler))]
+        static LogWriterUtils.ContextWriteResult WriteContextFormattedOutput{uniquePostfix}(ref FormatterStruct formatter, ref UnsafeText hstring, ref BinaryParser mem, IntPtr memAllocatorPtr, ref ArgumentInfo currArgSlot)
+        {{
+            var length = mem.LengthInBytes;
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
+            if (hstring.IsCreated == false || mem.IsValid == false || length < UnsafeUtility.SizeOf<ulong>())
+            {{
+                return LogWriterUtils.ContextWriteResult.Failed;
+            }}
+#endif
+            Unity.Logging.Internal.LoggerManager.DebugBreakpointPlaceForOutputWriterHandlers();
+
+            ref LogMemoryManager memAllocator = ref LogMemoryManager.FromPointer(memAllocatorPtr);
+
+            bool success = false;
+            int typeLength = 0;
+
+            var headerSize = UnsafeUtility.SizeOf<ulong>();
+            var header = mem.Peek<ulong>();
+
+            // Each generated struct holds a 'TypeId' as its first field identifying the struct's type
+            switch (header)
+            {{
+                {EmitTextLoggerStructureFormatWriterCases(structData.StructTypes)}
+
+                default:
+                    return LogWriterUtils.ContextWriteResult.UnknownType;
+            }}
+
+            return success ? LogWriterUtils.ContextWriteResult.Success : LogWriterUtils.ContextWriteResult.Failed;
+        }}
+    }}
+}}
+
+{EmitStrings.SourceFileFooter}
+");
 
             return sb;
         }
 
-        private StringBuilder EmitTextLogParserDefinition(string uniquePostfix)
-        {
-            // TODO: This log Writer can only be Bursted if all the generated structs FormatWritters are
-            // also Burst-compatible. Currently this is always true, but once custom formatters are added this
-            // may not be the case.
-            //
-            // Ideally we'd have 2 versions of context Writers: Bursted and non-Bursted, in which the individual
-            // WriteFormattedOutputs are called for the corresponding generated types. That is, if a given
-            // struct has a Burst-compatible Formatter, then it's called from the Bursted version and if not
-            // the non-Bursted version is used.
-            //
-            // Note that with nested structs, all the types included must also have Burst-compatible formatters.
-            // So some additional code-gen logic is necessary to ensure the entire WriteFormattedOutput call chain
-            // is Burstable before placing it in the Bursted version.
-
-            var isBursted = true;
-
-            var sb = new StringBuilder();
-
-            sb.AppendFormat(EmitStrings.TextLoggerStructureFormatWriterMethodDefinition,
-                isBursted ? EmitStrings.BurstCompileAttr : "",
-                uniquePostfix,
-                EmitTextLoggerStructureFormatWriterCases()
-            );
-
-            return sb;
-        }
-
-        private StringBuilder EmitTextLoggerStructureFormatWriterCases()
+        private static StringBuilder EmitTextLoggerStructureFormatWriterCases(List<LogStructureDefinitionData> types)
         {
             var sb = new StringBuilder();
 
-            // default handlers
-            sb.AppendFormat(EmitStrings.TextLoggerStructureFormatWriterSpecialTypeMethodCase, 1, "int");
-            sb.AppendFormat(EmitStrings.TextLoggerStructureFormatWriterSpecialTypeMethodCase, 2, "uint");
-            sb.AppendFormat(EmitStrings.TextLoggerStructureFormatWriterSpecialTypeMethodCase, 3, "ulong");
-            sb.AppendFormat(EmitStrings.TextLoggerStructureFormatWriterSpecialTypeMethodCase, 4, "long");
-            sb.AppendFormat(EmitStrings.TextLoggerStructureFormatWriterSpecialTypeMethodCase, 5, "char");
-            sb.AppendFormat(EmitStrings.TextLoggerStructureFormatWriterSpecialTypeMethodCase, 6, "float");
-
-            sb.AppendFormat(EmitStrings.TextLoggerStructureFormatWriterSpecialTypeDoubleMethod, 7, "double");
-            sb.AppendFormat(EmitStrings.TextLoggerStructureFormatWriterSpecialTypeBoolMethod, 8, "bool");
-
-            sb.AppendFormat(EmitStrings.TextLoggerStructureFormatWriterSpecialTypeMethodCase, 100, "FixedString32Bytes");
-            sb.AppendFormat(EmitStrings.TextLoggerStructureFormatWriterSpecialTypeMethodCase, 101, "FixedString64Bytes");
-            sb.AppendFormat(EmitStrings.TextLoggerStructureFormatWriterSpecialTypeMethodCase, 102, "FixedString128Bytes");
-            sb.AppendFormat(EmitStrings.TextLoggerStructureFormatWriterSpecialTypeMethodCase, 103, "FixedString512Bytes");
-            sb.AppendFormat(EmitStrings.TextLoggerStructureFormatWriterSpecialTypeMethodCase, 104, "FixedString4096Bytes");
-
-            foreach (var st in m_StructData.StructTypes)
+            var defaultSpecialTypes = new[]
             {
-                sb.AppendFormat(EmitStrings.TextLoggerStructureFormatWriterMethodCase, st.TypeId, st.FullGeneratedTypeName);
+                (1, "int"),
+                (2, "uint"),
+                (3, "ulong"),
+                (4, "long"),
+                (5, "char"),
+                (6, "float"),
+                (7, "double"),
+                (8, "bool"),
+
+                (10, "short"),
+                (11, "ushort"),
+                (12, "sbyte"),
+                (13, "byte"),
+            };
+
+            foreach (var (typeId, typeName) in defaultSpecialTypes)
+            {
+                sb.Append($@"
+                case {typeId}:
+                    typeLength = UnsafeUtility.SizeOf<{typeName}>() + headerSize;
+                    success = length >= typeLength && formatter.WriteProperty(ref hstring, """", mem.Skip(headerSize).Peek<{typeName}>(), ref currArgSlot);
+                    break;
+");
+            }
+
+            sb.Append($@"
+                case 110:
+                case 200:
+                    mem = mem.Skip(headerSize);
+                    int dataLength = mem.Peek<int>();
+                    success = mem.Skip<int>().AppendUTF8StringToUnsafeText(ref hstring, ref formatter, dataLength, ref currArgSlot);
+                    break;
+");
+
+            foreach (var st in types)
+            {
+                sb.Append($@"
+                case {st.TypeId}:
+                    typeLength = UnsafeUtility.SizeOf<{st.FullGeneratedTypeName}>();
+                    success = length >= typeLength && mem.WriteFormattedOutput<{st.FullGeneratedTypeName}>(ref hstring, ref formatter, ref memAllocator, ref currArgSlot);
+                    break;
+");
             }
 
             return sb;
         }
-
-        private LogStructureTypesData         m_StructData;
     }
 }

@@ -1,3 +1,7 @@
+#if UNITY_DOTSRUNTIME || UNITY_2021_2_OR_NEWER
+#define LOGGING_USE_UNMANAGED_DELEGATES // C# 9 support, unmanaged delegates - gc alloc free way to call
+#endif
+
 using System;
 using Unity.Burst;
 using System.Collections.Concurrent;
@@ -5,6 +9,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Unity.Collections.LowLevel.Unsafe;
+using UnityEngine;
 using UnityEngine.Assertions;
 
 namespace Unity.Logging.Internal
@@ -16,6 +21,7 @@ namespace Unity.Logging.Internal
     /// Used from the codegen
     /// <seealso cref="StackTraceCapture"/>
     /// </summary>
+    [HideInStackTrace]
     public static class ManagedStackTraceWrapper
     {
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -27,34 +33,10 @@ namespace Unity.Logging.Internal
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         internal delegate void ToUnsafeTextTraceDelegate(long id, ref UnsafeText result);
 
-        // make sure delegates are not collected by GC
-        private static CaptureStackTraceDelegate s_CaptureDelegate;
-        private static FreeStackTraceDelegate s_FreeDelegate;
-        private static ToUnsafeTextTraceDelegate s_ToUnsafeTextDelegate;
-
-        private struct CaptureDelegateKey
-        {
-        }
-
-        internal static readonly SharedStatic<FunctionPointer<CaptureStackTraceDelegate>> s_CaptureMethod =
-            SharedStatic<FunctionPointer<CaptureStackTraceDelegate>>.GetOrCreate<FunctionPointer<CaptureStackTraceDelegate>, CaptureDelegateKey>(16);
-
-        private struct FreeDelegateKey
-        {
-        }
-
-        internal static readonly SharedStatic<FunctionPointer<FreeStackTraceDelegate>> s_FreeMethod = SharedStatic<FunctionPointer<FreeStackTraceDelegate>>.GetOrCreate<FunctionPointer<FreeStackTraceDelegate>, FreeDelegateKey>(16);
-
-        private struct ToUnsafeTextDelegateKey
-        {
-        }
-
-        internal static readonly SharedStatic<FunctionPointer<ToUnsafeTextTraceDelegate>> s_ToUnsafeTextMethod =
-            SharedStatic<FunctionPointer<ToUnsafeTextTraceDelegate>>.GetOrCreate<FunctionPointer<ToUnsafeTextTraceDelegate>, ToUnsafeTextDelegateKey>(16);
-
         private static ConcurrentDictionary<long, StackTraceCapture.StackTraceData> s_StackTraces;
         private static long s_Counter;
 
+        struct ManagedStackTraceWrapperKey {}
         static ManagedStackTraceWrapper()
         {
             Initialize();
@@ -72,19 +54,13 @@ namespace Unity.Logging.Internal
             s_StackTraces = new ConcurrentDictionary<long, StackTraceCapture.StackTraceData>();
             s_Counter = 0;
 
-            s_CaptureDelegate = CaptureStackTrace;
-            s_FreeDelegate = FreeStackTrace;
-            s_ToUnsafeTextDelegate = ToUnsafeTextStackTrace;
-
-            s_CaptureMethod.Data = new FunctionPointer<CaptureStackTraceDelegate>(Marshal.GetFunctionPointerForDelegate(s_CaptureDelegate));
-            s_FreeMethod.Data = new FunctionPointer<FreeStackTraceDelegate>(Marshal.GetFunctionPointerForDelegate(s_FreeDelegate));
-            s_ToUnsafeTextMethod.Data = new FunctionPointer<ToUnsafeTextTraceDelegate>(Marshal.GetFunctionPointerForDelegate(s_ToUnsafeTextDelegate));
+            Burst2ManagedCall<CaptureStackTraceDelegate, ManagedStackTraceWrapperKey>.Init(CaptureStackTrace);
+            Burst2ManagedCall<FreeStackTraceDelegate, ManagedStackTraceWrapperKey>.Init(FreeStackTrace);
+            Burst2ManagedCall<ToUnsafeTextTraceDelegate, ManagedStackTraceWrapperKey>.Init(ToUnsafeTextStackTrace);
         }
 
-        public static readonly string CaptureStackTraceFuncName1 = $"{nameof(ManagedStackTraceWrapper)}.{nameof(Capture)}";
-        public static readonly string CaptureStackTraceFuncName2 = $"{nameof(ManagedStackTraceWrapper)}.{nameof(CaptureStackTrace)}";
-
         [AOT.MonoPInvokeCallback(typeof(CaptureStackTraceDelegate))]
+        [HideInStackTrace(hideEverythingInside:true)]
         private static long CaptureStackTrace()
         {
             var res = Interlocked.Increment(ref s_Counter);
@@ -113,11 +89,21 @@ namespace Unity.Logging.Internal
         /// Can be called from burst (if <see cref="Initialize"/> was called before) or not burst
         /// </summary>
         /// <returns>Id of the captured stacktrace</returns>
+        [HideInStackTrace(hideEverythingInside:true)]
         public static long Capture()
         {
             ThrowIfNotInitialized();
 
-            return s_CaptureMethod.Data.Invoke();
+            var ptr = Burst2ManagedCall<CaptureStackTraceDelegate, ManagedStackTraceWrapperKey>.Ptr();
+
+#if LOGGING_USE_UNMANAGED_DELEGATES
+            unsafe
+            {
+                return ((delegate * unmanaged[Cdecl] <long>)ptr.Value)();
+            }
+#else
+            return ptr.Invoke();
+#endif
         }
 
         /// <summary>
@@ -129,7 +115,18 @@ namespace Unity.Logging.Internal
         {
             ThrowIfNotInitialized();
             if (id != 0)
-                s_FreeMethod.Data.Invoke(id);
+            {
+                var ptr = Burst2ManagedCall<FreeStackTraceDelegate, ManagedStackTraceWrapperKey>.Ptr();
+
+#if LOGGING_USE_UNMANAGED_DELEGATES
+                unsafe
+                {
+                    ((delegate * unmanaged[Cdecl] <long, void>)ptr.Value)(id);
+                }
+#else
+                ptr.Invoke(id);
+#endif
+            }
         }
 
         /// <summary>
@@ -141,13 +138,24 @@ namespace Unity.Logging.Internal
         {
             ThrowIfNotInitialized();
             if (id != 0)
-                s_ToUnsafeTextMethod.Data.Invoke(id, ref result);
+            {
+                var ptr = Burst2ManagedCall<ToUnsafeTextTraceDelegate, ManagedStackTraceWrapperKey>.Ptr();
+
+#if LOGGING_USE_UNMANAGED_DELEGATES
+                unsafe
+                {
+                    ((delegate * unmanaged[Cdecl] <long, ref UnsafeText, void>)ptr.Value)(id, ref result);
+                }
+#else
+                ptr.Invoke(id, ref result);
+#endif
+            }
         }
 
-        [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS")]
+        [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS"), Conditional("UNITY_DOTS_DEBUG")] // ENABLE_UNITY_COLLECTIONS_CHECKS or UNITY_DOTS_DEBUG
         private static void ThrowIfNotInitialized()
         {
-            if (s_ToUnsafeTextMethod.Data.IsCreated == false)
+            if (Burst2ManagedCall<ToUnsafeTextTraceDelegate, ManagedStackTraceWrapperKey>.IsCreated == false)
                 throw new Exception("ManagedStackTraceWrapper.Initialize() was not called!");
         }
 

@@ -1,3 +1,7 @@
+#if UNITY_DOTSRUNTIME || UNITY_2021_2_OR_NEWER
+#define LOGGING_USE_UNMANAGED_DELEGATES // C# 9 support, unmanaged delegates - gc alloc free way to call
+#endif
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -19,7 +23,7 @@ namespace Unity.Logging.Internal
         /// </summary>
         /// <param name="ctx">LogContextWithDecorator that can be used to add new parameters to the log message</param>
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate void OutputWriterDecorateHandler(in LogContextWithDecorator ctx);
+        public delegate void OutputWriterDecorateHandler(ref LogContextWithDecorator ctx);
 
         private struct LoggerHandleKey {}
         private struct JobHandleKey {}
@@ -50,6 +54,33 @@ namespace Unity.Logging.Internal
         }
 
         /// <summary>
+        /// This function can be used for putting a breakpoint on any OutputWriterHandler that are not easy to access, since they come from sourcegen
+        /// NOTE: If breakpoint doesn't work - try to disable burst
+        /// </summary>
+        //[Conditional("UNITY_EDITOR")]
+        public static void DebugBreakpointPlaceForOutputWriterHandlers()
+        {
+            //Baselib.LowLevel.Binding.Baselib_Thread_YieldExecution();
+        }
+
+        private static byte s_Initialized = 0;
+        /// <summary>
+        /// This function usually executed from the static constructors to make sure all resources are allocated and ready for the logging system. You shouldn't call it directly.
+        /// </summary>
+        [BurstDiscard]
+        public static void Initialize()
+        {
+            if (s_Initialized != 0) return;
+                s_Initialized = 1;
+
+            BurstHelper.CheckThatBurstIsEnabled(false);
+            PerThreadData.Initialize();
+            ManagedStackTraceWrapper.Initialize();
+            TimeStampWrapper.Initialize();
+            Builder.Initialize();
+        }
+
+        /// <summary>
         /// Currently active logger's handle. Log.Info(...) and other calls will go to this one.
         /// Used by codegen
         /// </summary>
@@ -59,7 +90,7 @@ namespace Unity.Logging.Internal
 
         /// <summary>
         /// Gets/Sets the current active logger.
-        /// Log.Info(...) and other calls will go to this one.
+        /// Log.Info(...) and other calls will use the current one.
         /// Used by codegen. User sees it as Log.Logger = ...
         /// </summary>
         public static Logger Logger
@@ -171,36 +202,15 @@ namespace Unity.Logging.Internal
             CompleteUpdateLoggers();
 
             Logger = null;
-            for (var i = OtherLoggers.Count - 1; i >= 0; i--)
-            {
-                OtherLoggers[i].DisposeAllDecorators();
-            }
-
-            ref var gmem = ref GetGlobalDecoratorMemoryManager();
-
-            {
-                ref var gdec = ref s_GlobalDecoratePayloadHandles.Data;
-
-                try
-                {
-                    var n = gdec.BeginWrite();
-
-                    for (var i = 0; i < n; i++)
-                        gmem.ReleasePayloadBuffer(gdec.ElementAt(i), out _, true);
-
-                    ThreadSafeList4096<PayloadHandle>.GetReferenceNotThreadSafe(ref gdec).Clear();
-                }
-                finally
-                {
-                    gdec.EndWrite();
-                }
-            }
 
             FlushAll();
 
-#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            ShutdownAllGlobalDecorators();
+
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
             var errorLoggers = 0;
             var errorMessage = new NativeText(4096, Allocator.Temp);
+            ref var gmem = ref GetGlobalDecoratorMemoryManager();
             if (gmem.GetCurrentDefaultBufferUsage() != 0)
             {
                 ++errorLoggers;
@@ -211,16 +221,17 @@ namespace Unity.Logging.Internal
 
             for (var i = OtherLoggers.Count - 1; i >= 0; i--)
             {
-#if ENABLE_UNITY_COLLECTIONS_CHECKS
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
                 {
                     using var scopedLock = LogControllerScopedLock.Create(OtherLoggers[i].Handle);
                     ref var lc = ref scopedLock.GetLogController();
 
-                    if (lc.MemoryManager.GetCurrentDefaultBufferUsage() != 0)
+                    var usage = lc.MemoryManager.GetCurrentDefaultBufferUsage();
+                    if (usage != 0)
                     {
                         ++errorLoggers;
                         var name = (FixedString128Bytes)"OtherLoggers["; name.Append(i); name.Append(']');
-                        errorMessage.Append(gmem.DebugStateString(name));
+                        errorMessage.Append(lc.MemoryManager.DebugStateString(name));
                         errorMessage.Append('\n');
                     }
                 }
@@ -232,12 +243,21 @@ namespace Unity.Logging.Internal
 
             LogControllerWrapper.ShutdownAll();
 
-#if ENABLE_UNITY_COLLECTIONS_CHECKS
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
             var str = errorMessage.ToString();
             errorMessage.Dispose();
 
             Assert.AreEqual(0, errorLoggers, str);
 #endif
+        }
+
+        private static void ShutdownAllGlobalDecorators()
+        {
+            if (s_GlobalMemoryManager.Data.IsInitialized)
+                s_GlobalMemoryManager.Data.Shutdown();
+
+            s_GlobalDecoratePayloadHandles.Data.Clear();
+            s_OutputWriterDecorateHandlers.Data.Clear();
         }
 
         /// <summary>
@@ -350,10 +370,19 @@ namespace Unity.Logging.Internal
         /// </summary>
         /// <param name="nBefore">Current count of list of global constant decorations</param>
         /// <returns>The list of global constant decorations</returns>
-        public static ref FixedList4096Bytes<PayloadHandle> BeginEditDecoratePayloadHandles(out int nBefore)
+        public static LogContextWithDecorator BeginEditDecoratePayloadHandles(out int nBefore)
         {
             nBefore = s_GlobalDecoratePayloadHandles.Data.BeginWrite();
-            return ref ThreadSafeList4096<PayloadHandle>.GetReferenceNotThreadSafe(ref s_GlobalDecoratePayloadHandles.Data);
+
+            ref var list = ref ThreadSafeList4096<PayloadHandle>.GetReferenceNotThreadSafe(ref s_GlobalDecoratePayloadHandles.Data);
+
+            unsafe
+            {
+                fixed (FixedList4096Bytes<PayloadHandle>* ptr = &list)
+                {
+                    return new LogContextWithDecorator(ptr);
+                }
+            }
         }
 
         /// <summary>
@@ -422,18 +451,26 @@ namespace Unity.Logging.Internal
         /// </summary>
         /// <param name="handles">Where to add decorations</param>
         /// <returns>Count of added decorations</returns>
-        internal static ushort ExecuteDecorateHandlers(LogContextWithDecorator handles)
+        internal static ushort ExecuteDecorateHandlers(ref LogContextWithDecorator handles)
         {
             var lengthBefore = handles.Length;
 
             ref var decors = ref s_OutputWriterDecorateHandlers.Data;
 
-            var n = decors.BeginRead();
             try
             {
-                for (var i = 0; i < n; i++)
+                unsafe
                 {
-                    decors.ElementAt(i).Invoke(handles);
+                    var n = decors.BeginRead();
+                    for (var i = 0; i < n; i++)
+                    {
+                        ref var func = ref decors.ElementAt(i);
+#if LOGGING_USE_UNMANAGED_DELEGATES
+                        ((delegate * unmanaged[Cdecl] <ref LogContextWithDecorator, void>)func.Value)(ref handles);
+#else
+                        func.Invoke(ref handles);
+#endif
+                    }
                 }
             }
             finally
@@ -470,7 +507,7 @@ namespace Unity.Logging.Internal
             }
         }
 
-        [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS")]
+        [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS"), Conditional("UNITY_DOTS_DEBUG")] // ENABLE_UNITY_COLLECTIONS_CHECKS or UNITY_DOTS_DEBUG
         public static void DebugPrintQueueInfos()
         {
             LogControllerWrapper.DebugPrintQueueInfos(s_CurrentLoggerHandle.Data);
@@ -520,6 +557,12 @@ namespace Unity.Logging.Internal
         public static void ClearOnNewLoggerCreatedEvent()
         {
             m_onNewLoggerCreatedEvent = null;
+        }
+
+        public static void CreateDefaultLoggerIfNone()
+        {
+            if (CurrentLoggerHandle.IsValid == false)
+                DefaultSettings.CreateDefaultLogger();
         }
     }
 

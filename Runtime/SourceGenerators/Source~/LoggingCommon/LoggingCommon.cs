@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Microsoft.CodeAnalysis;
 using System.Linq;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -214,6 +215,27 @@ namespace SourceGenerator.Logging
             LogCompilerMessage(context, error.Item1, error.Item2, DiagnosticSeverity.Error, "", location);
         }
 
+        public static void LogCompilerErrorFieldNameConflict(this GeneratorExecutionContext context, IFieldSymbol[] fields, string conflictingName)
+        {
+            var error = CompilerMessages.MessageErrorFieldNameConflict;
+            var msg = string.Format(error.Item2, conflictingName);
+
+            Location location = null;
+
+            if (fields.Length > 0)
+            {
+                location = fields[fields.Length - 1].Locations.FirstOrDefault();
+                if (location == null)
+                    location = fields[0].Locations.FirstOrDefault();
+            }
+
+            if (location == null)
+                location = Location.None;
+
+            Debug.LogError(context, $"{error.Item1}: {msg} {location}");
+            LogCompilerMessage(context, error.Item1, msg, DiagnosticSeverity.Error, "", location);
+        }
+
         // When optional write to Temp folder fails
         public static void LogCompilerWarningTempWriteException(this GeneratorExecutionContext context, Exception e, string filename)
         {
@@ -236,16 +258,6 @@ namespace SourceGenerator.Logging
 
             var location = expression.GetLocation();
             var desc = $"{warning.Item2} : <{expression}> has field type <{fieldSymbol}> it will be ignored";
-            Debug.LogWarning(context, $"{warning.Item1}: {desc} {location}");
-            LogCompilerMessage(context, warning.Item1, desc, DiagnosticSeverity.Warning, "", location);
-        }
-
-        public static void LogCompilerWarningNotPublic(this GeneratorExecutionContext context, ExpressionSyntax expression)
-        {
-            var warning = CompilerMessages.PublicFieldsWarning;
-
-            var location = expression.GetLocation();
-            var desc = $"{warning.Item2} : {expression}";
             Debug.LogWarning(context, $"{warning.Item1}: {desc} {location}");
             LogCompilerMessage(context, warning.Item1, desc, DiagnosticSeverity.Warning, "", location);
         }
@@ -283,6 +295,54 @@ namespace SourceGenerator.Logging
             Debug.LogError(context, msg);
             LogCompilerMessage(context, error.Item1, msg, DiagnosticSeverity.Error, "", location);
         }
+
+        // literal message analysis messages
+        public static void LogCompilerLiteralMessage(this GeneratorExecutionContext context, string errorCode, string message, Location location)
+        {
+            LogCompilerMessage(context, errorCode, message, DiagnosticSeverity.Warning, "", location);
+        }
+
+        public static void LogCompilerLiteralMessageMissingArgForHole(this GeneratorExecutionContext context, string msg, Location location)
+        {
+            var warn = CompilerMessages.LiteralMessageMissingArgForHole;
+            msg = string.Format(warn.Item2, msg);
+
+            LogCompilerMessage(context, warn.Item1, msg, DiagnosticSeverity.Warning, "", location);
+        }
+
+        public static void LogCompilerLiteralMessageMissingHoleForArg(this GeneratorExecutionContext context, Location location)
+        {
+            var warn = CompilerMessages.LiteralMessageMissingHoleForArg;
+            var msg = warn.Item2;
+
+            LogCompilerMessage(context, warn.Item1, msg, DiagnosticSeverity.Warning, "", location);
+        }
+
+        public static void LogCompilerLiteralMessageInvalidArgument(this GeneratorExecutionContext context, string msg, Location location)
+        {
+            var warn = CompilerMessages.LiteralMessageInvalidArgument;
+            msg = warn.Item2;
+
+            LogCompilerMessage(context, warn.Item1, msg, DiagnosticSeverity.Warning, "", location);
+        }
+
+        public static void LogCompilerLiteralMessageMissingIndexArg(this GeneratorExecutionContext context, int missedIndx, Location location)
+        {
+            var warn = CompilerMessages.LiteralMessageMissingIndexArg;
+            var msg = string.Format(warn.Item2, missedIndx);
+
+            LogCompilerMessage(context, warn.Item1, msg, DiagnosticSeverity.Warning, "", location);
+        }
+
+        public static void LogCompilerLiteralMessageRepeatingNamedArg(this GeneratorExecutionContext context, string msg, Location location)
+        {
+            var warn = CompilerMessages.LiteralMessageRepeatingNamedArg;
+            msg = string.Format(warn.Item2, msg);
+
+            LogCompilerMessage(context, warn.Item1, msg, DiagnosticSeverity.Warning, "", location);
+        }
+
+        // ---------------------------------
 
         private static void LogCompilerMessage(GeneratorExecutionContext context, string errorCode, string message, DiagnosticSeverity severity, string description = "")
         {

@@ -13,6 +13,9 @@ namespace SourceGenerator.Logging
 {
     class LogTypesEmitter
     {
+        private GeneratorExecutionContext     m_Context;
+        private LogStructureTypesData         m_StructData;
+
         private LogTypesEmitter()
         {
         }
@@ -28,23 +31,19 @@ namespace SourceGenerator.Logging
             };
 
             var namespaceList = structData.StructTypes.Select(x => x.ContainingNamespace).Distinct().ToImmutableArray();
+            var includesHashSet = new HashSet<string>(namespaceList);
+            includesHashSet.UnionWith(EmitStrings.StdIncludes);
 
             var sb = new StringBuilder();
-            sb.Append(EmitSourceFileHeader(namespaceList));
-            sb.Append(emitter.EmitTextLogStructureTypeDefinitions(namespaceList));
 
-            return sb;
-        }
+            sb.Append($@"{EmitStrings.SourceFileHeader}
+{EmitStrings.GenerateIncludeHeader(includesHashSet)}
 
-        private static StringBuilder EmitSourceFileHeader(ImmutableArray<string> namespaceList)
-        {
-            var sb = new StringBuilder();
-            sb.Append(EmitStrings.SourceFileHeader);
-            foreach (var name in namespaceList)
-            {
-                sb.AppendLine($"using {name};");
-            }
-            sb.AppendLine(EmitStrings.SourceFileFooter);
+{emitter.EmitTextLogStructureTypeDefinitions(namespaceList)}
+
+{EmitStrings.SourceFileFooter}
+");
+
             return sb;
         }
 
@@ -56,10 +55,11 @@ namespace SourceGenerator.Logging
 
             foreach (var name in namespaceList)
             {
-                sb.AppendFormat(EmitStrings.TextLoggerTypesNamespaceEnclosure,
-                    name,
-                    EmitTextLogStructureTypeDefinitionsForNamespace(name)
-                );
+                sb.Append($@"
+namespace {name}
+{{
+    {EmitTextLogStructureTypeDefinitionsForNamespace(name)}
+}}");
             }
 
             return sb;
@@ -72,95 +72,66 @@ namespace SourceGenerator.Logging
             var structList = m_StructData.StructTypes.Where(x => x.ContainingNamespace == currNamespace);
             foreach (var inst in structList)
             {
-                sb.AppendFormat(EmitStrings.TextLoggerTypesDefinition,
-                    inst.GeneratedTypeName,
-                    EmitTextLogStructureContent(inst)
-                );
+                sb.Append($@"
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    internal struct {inst.GeneratedTypeName} : IWriterFormattedOutput
+    {{
+        public const ulong {inst.GeneratedTypeName}_TypeIdValue = {inst.TypeId.ToString()};
+
+        public ulong {m_StructData.StructIdFieldName};
+
+        {EmitFields(inst)}
+
+        public bool WriteFormattedOutput(ref UnsafeText output, ref FormatterStruct formatter, ref LogMemoryManager memAllocator, ref ArgumentInfo currArgSlot, int depth)
+        {{
+            bool success = formatter.BeforeObject(ref output);
+
+            {EmitTextLogStructureWriterContent(inst)}
+
+            success = formatter.AfterObject(ref output) && success;
+
+            return success;
+        }}
+
+        {EmitTextLogStructureConversion(inst)}
+    }}
+");
             }
 
             return sb;
         }
 
-        private StringBuilder EmitTextLogStructureContent(in LogStructureDefinitionData currStruct)
-        {
-            var sb = new StringBuilder();
-
-            sb.Append(EmitTextLogStructureIdField(currStruct));
-            sb.Append(EmitTextLogStructureFields(currStruct));
-            sb.Append(EmitTextLogStructureWriter(currStruct));
-            sb.Append(EmitTextLogStructureTypeId(currStruct));
-            sb.Append(EmitTextLogStructureConversion(currStruct));
-
-            return sb;
-        }
-
-        private StringBuilder EmitTextLogStructureIdField(in LogStructureDefinitionData currStruct)
-        {
-            var sb = new StringBuilder();
-
-            // Generated structs are identified by a Type ID integer value.
-            // This value is set in a const field within the struct declaration, but the value must
-            // also be assigned to a field for a given instance of this struct type. This value is
-            // serialized with the rest of the fields and used by the log Sink to identify message data.
-            //
-            // NOTE: The TypeID field must be the first field in the struct; the Lister message parser will
-            // read the TypeId as the first 32-bit value in the struct's byte buffer.
-
-            sb.AppendFormat(EmitStrings.TextLoggerTypesFieldMember,
-                "ulong",
-                m_StructData.StructIdFieldName
-            );
-
-            return sb;
-        }
-
-        private static StringBuilder EmitTextLogStructureFields(in LogStructureDefinitionData currStruct)
+        private static StringBuilder EmitFields(in LogStructureDefinitionData currStruct)
         {
             var sb = new StringBuilder();
 
             foreach (var f in currStruct.FieldData)
             {
+                sb.Append($@"
+        // Field name {f.PropertyNameForSerialization}");
+
                 // attribute
                 if (f.Symbol.Type.SpecialType == SpecialType.System_Boolean)
-                    sb.AppendFormat(EmitStrings.TextLoggerTypesFieldMemberAttributeForBool); // "[MarshalAs(UnmanagedType.U1)]" to make burst happy
-
-                // declaration
-                if (f.Symbol.Type.SpecialType == SpecialType.System_Char)
                 {
-                    sb.AppendFormat(EmitStrings.TextLoggerTypesFieldMember, "int", f.FieldName); // char is not blittable
+                    sb.Append($@"
+        public byte {f.FieldName};");
+                }
+                else if (f.Symbol.Type.SpecialType == SpecialType.System_Char)
+                {
+                    sb.Append($@"
+        public int {f.FieldName};");
+                }
+                else if (f.NeedsPayload)
+                {
+                    sb.Append($@"
+        public PayloadHandle {f.FieldName};");
                 }
                 else
                 {
-                    sb.AppendFormat(EmitStrings.TextLoggerTypesFieldMember, f.FieldTypeName, f.FieldName);
+                    sb.Append($@"
+        public {f.FieldTypeName} {f.FieldName};");
                 }
             }
-
-            return sb;
-        }
-
-        private static StringBuilder EmitTextLogStructureTypeId(in LogStructureDefinitionData currStruct)
-        {
-            var sb = new StringBuilder();
-
-            sb.AppendFormat(EmitStrings.TextLoggerTypesIdValue,
-                currStruct.GeneratedTypeName,
-                currStruct.TypeId.ToString());
-
-            return sb;
-        }
-
-        private StringBuilder EmitTextLogStructureWriter(in LogStructureDefinitionData currStruct)
-        {
-            var sb = new StringBuilder();
-
-            // TODO: This outputs a simple "default" formatting: structure data enclosed in '[' ']', fields comma-delimited, field names omitted.
-            // However currently there's no way to customize formatted, and eventually need a way for user's to specify a custom format (function)
-            // via the TextLogger attribute.
-
-            sb.AppendFormat(EmitStrings.TextLoggerTypesFormatterDefinition,
-                EmitTextLogStructureWriterContent(currStruct),
-                "[",
-                "]");
 
             return sb;
         }
@@ -184,13 +155,14 @@ namespace SourceGenerator.Logging
             var sb = new StringBuilder();
 
             if (!isFirst)
-                sb.AppendFormat(EmitStrings.TextLoggerTypesFormatterWritePrimitiveDelimiter, ", ");
+                sb.Append(@"
+            success = formatter.AppendDelimiter(ref output) && success;");
 
             if (currField.IsGeneratedType)
             {
                 // If field is also a generated struct type, then simply call it's own Write method
-                sb.AppendFormat(EmitStrings.TextLoggerTypesFormatterInvokeOnStructField,
-                    currField.FieldName);
+                sb.Append($@"
+            success = formatter.WriteChild(ref output, ""{currField.PropertyNameForSerialization}"", ref {currField.FieldName}, ref memAllocator, ref currArgSlot, depth + 1) && success;");
             }
             else
             {
@@ -200,51 +172,68 @@ namespace SourceGenerator.Logging
                     // These types are supported directly by UnsafeText and don't require a cast
                     case "Char":
                         // cast needed, because it is stored as int (blittable), char is not blittable
-                        sb.AppendFormat(EmitStrings.TextLoggerTypesFormatterWritePrimitiveFieldWithDefaultFormat, currField.FieldName, "(char)");
+                        sb.Append($@"
+            success = formatter.WriteProperty(ref output, ""{currField.PropertyNameForSerialization}"", (char){currField.FieldName}, ref currArgSlot) && success;");
+
                         break;
 
                     case "Byte":
+                    case "SByte":
+                    case "Int16":
+                    case "UInt16":
                     case "Int32":
                     case "UInt32":
                     case "Int64":
                     case "UInt64":
                     case "Single":
-                        sb.AppendFormat(EmitStrings.TextLoggerTypesFormatterWritePrimitiveFieldWithDefaultFormat, currField.FieldName, "");
+                        sb.Append($@"
+            success = formatter.WriteProperty(ref output, ""{currField.PropertyNameForSerialization}"", {currField.FieldName}, ref currArgSlot) && success;");
                         break;
 
                     // These types require and explicit cast to avoid compile errors
                     case "Double":
-                        sb.AppendFormat(EmitStrings.TextLoggerTypesFormatterWritePrimitiveFieldWithDefaultFormat, currField.FieldName, "(float)");
-                        break;
-                    case "Int16":
-                        sb.AppendFormat(EmitStrings.TextLoggerTypesFormatterWritePrimitiveFieldWithDefaultFormat, currField.FieldName, "(int)");
-                        break;
-                    case "UInt16":
-                        sb.AppendFormat(EmitStrings.TextLoggerTypesFormatterWritePrimitiveFieldWithDefaultFormat, currField.FieldName, "(uint)");
-                        break;
-                    case "SByte":
-                        sb.AppendFormat(EmitStrings.TextLoggerTypesFormatterWritePrimitiveFieldWithDefaultFormat, currField.FieldName, "(int)");
+                        sb.Append($@"
+            success = formatter.WriteProperty(ref output, ""{currField.PropertyNameForSerialization}"", {currField.FieldName}, ref currArgSlot) && success;");
                         break;
 
                     case "Boolean":
-                        sb.AppendFormat(EmitStrings.TextLoggerTypesFormatterWriteBooleanFieldWithDefaultFormat, currField.FieldName);
+                        sb.Append($@"
+            success = formatter.WriteProperty(ref output, ""{currField.PropertyNameForSerialization}"", {currField.FieldName} != 0, ref currArgSlot) && success;");
                         break;
 
                     // TODO: These should be formatted without throwing out the precision
                     case "Decimal":
-                        sb.AppendFormat(EmitStrings.TextLoggerTypesFormatterWritePrimitiveFieldWithDefaultFormat, currField.FieldName, "(float)");
+                        sb.Append($@"
+            success = formatter.WriteProperty(ref output, ""{currField.PropertyNameForSerialization}"", {currField.FieldName}, ref currArgSlot) && success;");
                         break;
 
                     // TODO: These should be formatted into hex strings, e.g. 0x0012345
                     case "IntPtr":
                     case "UIntPtr":
-                        sb.AppendFormat(EmitStrings.TextLoggerTypesFormatterWritePrimitiveFieldWithDefaultFormat, currField.FieldName, "(ulong)");
+                        sb.Append($@"
+            success = formatter.WriteProperty(ref output, ""{currField.PropertyNameForSerialization}"", {currField.FieldName}, ref currArgSlot) && success;");
+                        break;
+
+                    case "String":
+                    case "UnsafeText":
+                    case "NativeText":
+                        sb.Append($@"
+            success = formatter.WriteProperty(ref output, ""{currField.PropertyNameForSerialization}"", {currField.FieldName}, ref memAllocator, ref currArgSlot) && success;");
                         break;
 
                     default:
 
-                        // Attempt to generate formatted output for special case types, e.g. FixedString
-                        if (!HandleSpecialCaseWriteExpressions(currStruct, currField, sb))
+                        var warningNeeded = true;
+                        var fieldTypeName = currField.Symbol.Type.Name;
+
+                        if (fieldTypeName.StartsWith("FixedString"))
+                        {
+                            sb.Append($@"
+            success = formatter.WriteProperty(ref output, ""{currField.PropertyNameForSerialization}"", {currField.FieldName}, ref currArgSlot) && success;");
+                            warningNeeded = false;
+                        }
+
+                        if (warningNeeded)
                         {
                             m_Context.LogCompilerWarning(CompilerMessages.OutputWriterError);
                         }
@@ -255,26 +244,54 @@ namespace SourceGenerator.Logging
             return sb;
         }
 
-        private static bool HandleSpecialCaseWriteExpressions(in LogStructureDefinitionData currStruct, in LogStructureFieldData currField, StringBuilder sb)
-        {
-            // FixedStrings are supported by UnsafeText and can be appended directly
-            if (currField.Symbol.Type.Name.StartsWith("FixedString"))
-            {
-                sb.AppendFormat(EmitStrings.TextLoggerTypesFormatterWritePrimitiveFieldWithDefaultFormat, currField.FieldName, "");
-                return true;
-            }
-
-            return false;
-        }
-
         private StringBuilder EmitTextLogStructureConversion(LogStructureDefinitionData currStruct)
         {
+            var sbInit = "";
+            var sbFree = "";
+            if (currStruct.ContainsPayloads)
+            {
+                const string initPayloads = @"
+            LogControllerScopedLock @lock = default;
+            var handle = PerThreadData.ThreadLoggerHandle;
+            try
+            {
+                if (handle.IsValid)
+                {
+                    @lock = LogControllerScopedLock.CreateAlreadyUnderLock(handle);
+                }
+                else
+                {
+                    @lock = LogControllerScopedLock.Create();
+                }
+
+                ref var memAllocator = ref @lock.GetLogController().MemoryManager;
+";
+
+                const string postfixPayloads = @"
+            }
+            finally
+            {
+                @lock.Dispose();
+            }
+";
+
+                sbInit = initPayloads;
+                sbFree = postfixPayloads;
+            }
+
             var sb = new StringBuilder();
 
-            sb.AppendFormat(EmitStrings.TextLoggerImplicitConversionDefinition,
-                currStruct.GeneratedTypeName,
-                currStruct.FullTypeName,
-                EmitTypeConversionFieldCopy(currStruct));
+            sb.Append($@"
+        public static implicit operator {currStruct.GeneratedTypeName}(in {currStruct.FullTypeName} arg)
+        {{
+            {sbInit}
+            return new {currStruct.GeneratedTypeName}
+            {{
+                {EmitTypeConversionFieldCopy(currStruct)}
+            }};
+            {sbFree}
+        }}
+");
 
             return sb;
         }
@@ -284,41 +301,43 @@ namespace SourceGenerator.Logging
             var sb = new StringBuilder();
 
             // Initialize the TypeId field with const type value of the containing struct
-            var constTypeFieldName = typeInstance.GeneratedTypeName + "_TypeIdValue";
+            sb.Append($@"
+                {m_StructData.StructIdFieldName} = {typeInstance.GeneratedTypeName}.{typeInstance.GeneratedTypeName}_TypeIdValue,");
 
-            sb.AppendFormat(EmitStrings.TextLoggerImplicitConversionTypeIdCopy,
-                m_StructData.StructIdFieldName,
-                typeInstance.GeneratedTypeName);
-
-            if (typeInstance.Symbol.IsTupleType)
+            var i = 0;
+            foreach (var field in typeInstance.FieldData)
             {
-                // In case of tuple we're removing field names and using Item1, Item2, etc instead
-                // This is to workaround issue when user has
-                // Log.Info("{0}", (1, 2));
-                // Log.Info("{0}", (b:1, c:2));
-                // ambiguous error
-                var i = 0;
-                foreach (var field in typeInstance.FieldData)
+                ++i;
+                var fieldName = typeInstance.Symbol.IsTupleType ? $"Item{i}" : field.FieldName;
+                var middle = field.IsStatic ? $"{field.FieldTypeName}" : "arg";
+
+                if (field.Symbol.Type.Name == "String")
                 {
-                    ++i;
-                    sb.AppendFormat(EmitStrings.TextLoggerImplicitConversionFieldCopy,
-                        field.FieldName, field.IsStatic ? $"{field.FieldTypeName}" : "arg", $"Item{i}");
+                    sb.Append(@$"
+                {field.FieldName} = Unity.Logging.Builder.CopyStringToPayloadBuffer({middle}.{fieldName}, ref memAllocator, prependLength: true, deferredRelease: true),
+");
                 }
-            }
-            else
-            {
-                // Copy over each field from the user's struct
-                foreach (var field in typeInstance.FieldData)
+                else if (field.Symbol.Type.Name == "NativeText" || field.Symbol.Type.Name == "UnsafeText")
                 {
-                    sb.AppendFormat(EmitStrings.TextLoggerImplicitConversionFieldCopy,
-                        field.FieldName, field.IsStatic ? $"{field.FieldTypeName}" : "arg", field.FieldName);
+                    sb.Append(@$"
+                {field.FieldName} = Unity.Logging.Builder.CopyCollectionStringToPayloadBuffer({middle}.{fieldName}, ref memAllocator, prependLength: true, deferredRelease: true),
+");
+                }
+                else if (field.Symbol.Type.SpecialType == SpecialType.System_Boolean)
+                {
+                    sb.Append(@$"
+                {field.FieldName} = (byte)({middle}.{fieldName} ? 1 : 0),
+");
+                }
+                else
+                {
+                    sb.Append(@$"
+                {field.FieldName} = {middle}.{fieldName},
+");
                 }
             }
 
             return sb;
         }
-
-        private GeneratorExecutionContext           m_Context;
-        private LogStructureTypesData         m_StructData;
     }
 }

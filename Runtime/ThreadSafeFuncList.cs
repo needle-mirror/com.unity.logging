@@ -37,9 +37,9 @@ namespace Unity.Logging.Internal
 
         public void Add(T obj)
         {
-            Lock();
             try
             {
+                Lock();
                 m_Data.Add(obj);
             }
             finally
@@ -50,9 +50,9 @@ namespace Unity.Logging.Internal
 
         public void Remove(T obj)
         {
-            Lock();
             try
             {
+                Lock();
                 m_Data.RemoveSwapBack(obj);
             }
             finally
@@ -63,9 +63,9 @@ namespace Unity.Logging.Internal
 
         public void Remove<U>(U list) where U : struct, INativeList<T>
         {
-            Lock();
             try
             {
+                Lock();
                 var n = list.Length;
                 for (var i = 0; i < n; i++)
                     m_Data.RemoveSwapBack(list.ElementAt(i));
@@ -126,6 +126,19 @@ namespace Unity.Logging.Internal
         {
             return ref m_Data.ElementAt(i);
         }
+
+        public void Clear()
+        {
+            try
+            {
+                Lock();
+                m_Data.Clear();
+            }
+            finally
+            {
+                Unlock();
+            }
+        }
     }
 
     /// <summary>
@@ -161,9 +174,9 @@ namespace Unity.Logging.Internal
 
         public void Add(FunctionPointer<T> func)
         {
-            Lock();
             try
             {
+                Lock();
                 foreach (var item in m_Data)
                 {
                     if (item.Value == func.Value)
@@ -179,9 +192,9 @@ namespace Unity.Logging.Internal
 
         public void Remove(IntPtr token)
         {
-            Lock();
             try
             {
+                Lock();
                 for (var i = 0; i < m_Data.Length; i++)
                 {
                     if (m_Data[i].Value == token)
@@ -190,6 +203,19 @@ namespace Unity.Logging.Internal
                         break;
                     }
                 }
+            }
+            finally
+            {
+                Unlock();
+            }
+        }
+
+        public void Clear()
+        {
+            try
+            {
+                Lock();
+                m_Data.Clear();
             }
             finally
             {

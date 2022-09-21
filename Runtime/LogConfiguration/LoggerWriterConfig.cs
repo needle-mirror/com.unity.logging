@@ -1,4 +1,5 @@
 using System;
+using Unity.Collections;
 using Unity.Logging.Sinks;
 
 namespace Unity.Logging
@@ -22,13 +23,29 @@ namespace Unity.Logging
         /// <returns>Main logger config</returns>
         public LoggerConfig AddSinkConfig(SinkConfiguration sinkConfig)
         {
-            if (sinkConfig.MinLevelOverride == null)
-                sinkConfig.MinLevelOverride = m_Config.MinimumLevel.Get;
-            if (sinkConfig.OutputTemplateOverride == null)
-                sinkConfig.OutputTemplateOverride = m_Config.GetOutputTemplate();
-
             m_Config.SinkConfigs.Add(sinkConfig);
             return m_Config;
+        }
+
+        public bool ResolveCaptureStackTrace(bool? captureStackTrace)
+        {
+            if (captureStackTrace == null)
+                return m_Config.GetCaptureStacktrace();
+            return captureStackTrace.Value;
+        }
+
+        public LogLevel ResolveMinLevel(LogLevel? minLevel)
+        {
+            if (minLevel == null)
+                return m_Config.MinimumLevel.Get;
+            return minLevel.Value;
+        }
+
+        public FixedString512Bytes ResolveOutputTemplate(FixedString512Bytes? outputTemplate)
+        {
+            if (outputTemplate == null)
+                return m_Config.GetOutputTemplate();
+            return outputTemplate.Value;
         }
     }
 }

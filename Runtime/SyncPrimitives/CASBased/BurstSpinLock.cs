@@ -1,6 +1,13 @@
-//#define USE_BASELIB
+#if UNITY_DOTSRUNTIME
+#define USE_BASELIB
+#define USE_BASELIB_FILEIO
+#endif
 
-#if ENABLE_UNITY_COLLECTIONS_CHECKS
+#if USE_BASELIB
+//#define MARK_THREAD_OWNERS
+#endif
+
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
 #define DEBUG_ADDITIONAL_CHECKS
 #endif
 
@@ -23,35 +30,55 @@ namespace Unity.Logging
     internal static class BurstSpinLockCheckFunctions
     {
         [Conditional("DEBUG_ADDITIONAL_CHECKS")]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void CheckForRecursiveLock(in long threadId, ref long lockVar)
         {
-#if USE_BASELIB
+#if MARK_THREAD_OWNERS
             var currentOwnerThreadId = Interlocked.Read(ref lockVar);
 
             if (threadId == currentOwnerThreadId)
-                throw new Exception("Recursive lock!");
+            {
+                UnityEngine.Debug.LogError(string.Format("Recursive lock! Thread {0}", threadId));
+                throw new Exception($"Recursive lock! Thread {threadId}");
+            }
 #endif
         }
 
         [Conditional("DEBUG_ADDITIONAL_CHECKS")]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void CheckForRecursiveLock(ref long lockVar)
         {
-#if USE_BASELIB
+#if MARK_THREAD_OWNERS
             var threadId = Baselib.LowLevel.Binding.Baselib_Thread_GetCurrentThreadId().ToInt64();
             CheckForRecursiveLock(threadId, ref lockVar);
 #endif
         }
 
         [Conditional("DEBUG_ADDITIONAL_CHECKS")]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void CheckWeCanExit(ref long lockVar)
         {
-#if USE_BASELIB
             var currentOwnerThreadId = Interlocked.Read(ref lockVar);
+            if (currentOwnerThreadId == 0)
+                throw new Exception("Exit is called on not locked lock");
+
+#if MARK_THREAD_OWNERS
             var threadId = Baselib.LowLevel.Binding.Baselib_Thread_GetCurrentThreadId().ToInt64();
 
             if (threadId != currentOwnerThreadId)
-                throw new Exception("Exit is called from the other thread!");
+            {
+                UnityEngine.Debug.LogError(string.Format("Exit is called from the other ({0}) thread, owner thread = {1}", threadId, currentOwnerThreadId));
+                throw new Exception($"Exit is called from the other ({threadId}) thread, owner thread = {currentOwnerThreadId}");
+            }
 #endif
+        }
+
+        [Conditional("DEBUG_ADDITIONAL_CHECKS")]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void CheckLocked(ref long lockVar)
+        {
+            if (Interlocked.Read(ref lockVar) == 0)
+                throw new Exception("Exit is called on not locked lock");
         }
     }
 
@@ -66,7 +93,7 @@ namespace Unity.Logging
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void EnterExclusive(ref long lockVar)
         {
-#if USE_BASELIB
+#if MARK_THREAD_OWNERS
             var threadId = Baselib.LowLevel.Binding.Baselib_Thread_GetCurrentThreadId().ToInt64();
             BurstSpinLockCheckFunctions.CheckForRecursiveLock(threadId, ref lockVar);
 #else
@@ -88,7 +115,7 @@ namespace Unity.Logging
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryEnterExclusive(ref long lockVar)
         {
-#if USE_BASELIB
+#if MARK_THREAD_OWNERS
             var threadId = Baselib.LowLevel.Binding.Baselib_Thread_GetCurrentThreadId().ToInt64();
             BurstSpinLockCheckFunctions.CheckForRecursiveLock(threadId, ref lockVar);
 #else
@@ -180,7 +207,10 @@ namespace Unity.Logging
         public void Dispose()
         {
             if (m_Locked.IsCreated)
+            {
+                Enter();
                 m_Locked.Dispose();
+            }
         }
 
         public bool Locked => Interlocked.Read(ref m_Locked.ElementAt(0)) != 0;

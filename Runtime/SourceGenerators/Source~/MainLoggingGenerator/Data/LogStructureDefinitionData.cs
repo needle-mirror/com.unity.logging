@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using Microsoft.CodeAnalysis;
 
@@ -14,10 +15,11 @@ namespace SourceGenerator.Logging
         public readonly string                              FullGeneratedTypeName;
         public readonly string                              Formatter;
         public readonly string                              ContainingNamespace;
-        public readonly List<LogStructureFieldData>   FieldData;
+        public readonly List<LogStructureFieldData>         FieldData;
 
         public bool IsValid => Symbol != null && TypeId != 0;
         public bool IsTaggedForLogging => !string.IsNullOrEmpty(Formatter);
+        public bool ContainsPayloads => FieldData.Any(f => f.NeedsPayload);
 
         public LogStructureDefinitionData(ulong assemblyHash, ITypeSymbol typeSymbol, uint localId, in LogCallArgumentData argInstance, List<LogStructureFieldData> fields)
         {

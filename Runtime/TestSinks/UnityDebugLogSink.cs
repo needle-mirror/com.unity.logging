@@ -1,80 +1,76 @@
+#if UNITY_DOTSRUNTIME || UNITY_2021_2_OR_NEWER
+#define LOGGING_USE_UNMANAGED_DELEGATES // C# 9 support, unmanaged delegates - gc alloc free way to call
+#endif
+
 using System;
 using System.Runtime.InteropServices;
 using Unity.Burst;
+using Unity.Jobs;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
-using Unity.Jobs;
 using Unity.Logging;
 using Unity.Logging.Internal.Debug;
 using Unity.Logging.Sinks;
 
-[assembly: RegisterGenericJobType(typeof(SinkJob<UnityDebugLogger>))]
-
 namespace Unity.Logging.Sinks
 {
-    public struct UnityDebugLogger : ILogger
-    {
-        public void OnLogMessage(in LogMessage logEvent, in FixedString512Bytes outTemplate, ref LogMemoryManager memoryManager)
-        {
-            var message = default(UnsafeText);
-            var errorMessage = default(FixedString512Bytes);
-
-            if (TextLoggerParser.ParseMessage(outTemplate, logEvent, ref message, ref errorMessage, ref memoryManager))
-            {
-                if (message.IsCreated)
-                {
-                    try
-                    {
-                        unsafe
-                        {
-                            var data = message.GetUnsafePtr();
-                            var length = message.Length;
-
-                            ManagedUnityEngineDebugLogWrapper.Write(logEvent.Level, data, length);
-                        }
-                    }
-                    finally
-                    {
-                        message.Dispose();
-                    }
-                }
-                else
-                {
-                    throw new Exception(); // this is a test sink
-                }
-            }
-            else
-            {
-                SelfLog.OnFailedToParseMessage();
-
-                throw new Exception(errorMessage.ToString()); // this is a test sink
-            }
-        }
-    }
-
-    public class UnityDebugLogSink : SinkSystemBase<UnityDebugLogger>
-    {
-        public override void Initialize(in Logger logger, in SinkConfiguration systemConfig)
-        {
-            ManagedUnityEngineDebugLogWrapper.Initialize();
-            base.Initialize(logger, systemConfig);
-        }
-    }
-
-
     public static class UnityDebugLogSinkExt
     {
         public static LoggerConfig UnityDebugLog(this LoggerWriterConfig writeTo,
-                                                 bool captureStackTrace = false,
+                                                 FormatterStruct formatter = default,
+                                                 bool? captureStackTrace = null,
                                                  LogLevel? minLevel = null,
                                                  FixedString512Bytes? outputTemplate = null)
         {
-            return writeTo.AddSinkConfig(new SinkConfiguration<UnityDebugLogSink>
+            if (formatter.IsCreated == false)
+                formatter = LogFormatterText.Formatter;
+
+            return writeTo.AddSinkConfig(new UnityDebugLogSink.Configuration(writeTo, formatter, captureStackTrace, minLevel, outputTemplate));
+        }
+    }
+
+    [BurstCompile]
+    public class UnityDebugLogSink : SinkSystemBase
+    {
+        public class Configuration : SinkConfiguration
+        {
+            public override SinkSystemBase CreateSinkInstance(Logger logger) => CreateAndInitializeSinkInstance<UnityDebugLogSink>(logger, this);
+
+            public Configuration(LoggerWriterConfig writeTo, FormatterStruct formatter,
+                                 bool? captureStackTraceOverride = null, LogLevel? minLevelOverride = null, FixedString512Bytes? outputTemplateOverride = null)
+                : base(writeTo, formatter, captureStackTraceOverride, minLevelOverride, outputTemplateOverride)
+            {}
+        }
+
+        public override LogController.SinkStruct ToSinkStruct()
+        {
+            var s = base.ToSinkStruct();
+            s.OnLogMessageEmit = new OnLogMessageEmitDelegate(OnLogMessageEmitFunc);
+            return s;
+        }
+
+        [BurstCompile]
+        [AOT.MonoPInvokeCallback(typeof(OnLogMessageEmitDelegate.Delegate))]
+        internal static void OnLogMessageEmitFunc(in LogMessage logEvent, ref FixedString512Bytes outTemplate, ref UnsafeText messageBuffer, IntPtr memoryManager, IntPtr userData, Allocator allocator)
+        {
+            unsafe
             {
-                CaptureStackTraces = captureStackTrace,
-                MinLevelOverride = minLevel,
-                OutputTemplateOverride = outputTemplate,
-            });
+                try
+                {
+                    var data = messageBuffer.GetUnsafePtr();
+                    ManagedUnityEngineDebugLogWrapper.Write(logEvent.Level, data, messageBuffer.Length);
+                }
+                finally
+                {
+                    messageBuffer.Length = 0;
+                }
+            }
+        }
+
+        public override void Initialize(Logger logger, SinkConfiguration systemConfig)
+        {
+            ManagedUnityEngineDebugLogWrapper.Initialize();
+            base.Initialize(logger, systemConfig);
         }
     }
 
@@ -83,30 +79,25 @@ namespace Unity.Logging.Sinks
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         internal unsafe delegate void WriteDelegate(LogLevel level, byte* data, int length);
 
-        // make sure delegates are not collected by GC
-        private static WriteDelegate s_WriteDelegate;
-
         private struct ManagedUnityEngineDebugLogWrapperKey {}
-        internal static readonly SharedStatic<FunctionPointer<WriteDelegate>> s_WriteMethod = SharedStatic<FunctionPointer<WriteDelegate>>.GetOrCreate<FunctionPointer<WriteDelegate>, ManagedUnityEngineDebugLogWrapperKey>(16);
 
-        private static bool IsInitialized;
+        private static bool s_IsInitialized;
 
         internal static void Initialize()
         {
-            if (IsInitialized) return;
-            IsInitialized = true;
+            if (s_IsInitialized) return;
+            s_IsInitialized = true;
 
             unsafe
             {
-                s_WriteDelegate = WriteFunc;
-                s_WriteMethod.Data = new FunctionPointer<WriteDelegate>(Marshal.GetFunctionPointerForDelegate(s_WriteDelegate));
+                Burst2ManagedCall<WriteDelegate, ManagedUnityEngineDebugLogWrapperKey>.Init(WriteFunc);
             }
         }
 
         [AOT.MonoPInvokeCallback(typeof(WriteDelegate))]
         private static unsafe void WriteFunc(LogLevel level, byte* data, int length)
         {
-            var str = System.Text.UTF8Encoding.UTF8.GetString(data, length);
+            var str = System.Text.Encoding.UTF8.GetString(data, length);
 
             switch (level)
             {
@@ -130,7 +121,12 @@ namespace Unity.Logging.Sinks
         // called from burst or not burst
         public static unsafe void Write(LogLevel level, byte* data, int length)
         {
-            s_WriteMethod.Data.Invoke(level, data, length);
+            var ptr = Burst2ManagedCall<WriteDelegate, ManagedUnityEngineDebugLogWrapperKey>.Ptr();
+#if LOGGING_USE_UNMANAGED_DELEGATES
+            ((delegate * unmanaged[Cdecl] <LogLevel, byte*, int, void>)ptr.Value)(level, data, length);
+#else
+            ptr.Invoke(level, data, length);
+#endif
         }
     }
 }

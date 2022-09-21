@@ -1,15 +1,15 @@
 {
   "name": "com.unity.logging",
   "displayName": "Unity Logging",
-  "version": "0.51.1-preview.21",
-  "unity": "2020.3",
-  "unityRelease": "0f1",
+  "version": "1.0.0-exp.6",
+  "unity": "2022.2",
+  "unityRelease": "0b5",
   "dependencies": {
-    "com.unity.burst": "1.6.4",
-    "com.unity.collections": "1.4.0",
-    "com.unity.roslyn": "0.2.2-preview",
-    "com.unity.nuget.newtonsoft-json": "2.0.2",
-    "com.unity.test-framework.performance": "2.8.0-preview"
+    "com.unity.jobs": "0.70.0-preview.7",
+    "com.unity.burst": "1.7.3"
+  },
+  "relatedPackages": {
+    "com.unity.logging.tests": "1.0.0"
   },
   "description": "The Logging package provides interfaces for creating and processing runtime events and logging output.",
   "keywords": [
@@ -17,16 +17,13 @@
     "logging",
     "unity"
   ],
-  "upm": {
-    "changelog": "### Changed\n\n* Updated `com.unity.collections` to version `1.4.0`"
-  },
   "upmCi": {
-    "footprint": "5e220fbdb1d2a72bef047564ef88b070e7ab01cd"
+    "footprint": "513c6548bf7900821fa3c5a2c6a68e17e138268a"
   },
   "repository": {
     "url": "https://github.cds.internal.unity3d.com/unity/dots.git",
     "type": "git",
-    "revision": "063a98897b40805f53b859bb426ce664229d0c00"
+    "revision": "b7e02674e309e3f328a602df067aa993264e7526"
   },
   "samples": [
     {

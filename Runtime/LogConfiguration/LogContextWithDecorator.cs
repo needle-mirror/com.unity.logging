@@ -4,6 +4,19 @@ using Unity.Collections;
 namespace Unity.Logging.Internal
 {
     /// <summary>
+    /// Wrapper for <see cref="LogContextWithDecorator"/> that is created in Decorator functions with Log.To(LogContextWithDecorator)
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct LogContextWithDecoratorLogTo
+    {
+        public LogContextWithDecorator context;
+        public LogContextWithDecoratorLogTo(in LogContextWithDecorator d)
+        {
+            context = d;
+        }
+    }
+
+    /// <summary>
     /// Struct that is used to wrap FixedList of <see cref="PayloadHandle"/>s and <see cref="LogControllerScopedLock"/>.
     /// </summary>
     /// <remarks>
@@ -11,7 +24,7 @@ namespace Unity.Logging.Internal
     /// <seealso cref="LogDecorateScope"/>
     /// </remarks>
     [StructLayout(LayoutKind.Sequential)]
-    public unsafe struct LogContextWithDecorator
+    public struct LogContextWithDecorator
     {
         /// <summary>
         /// Mode that defines if this is 512 or 4096 elements list
@@ -32,10 +45,10 @@ namespace Unity.Logging.Internal
         /// <summary>
         /// <see cref="Mode"/> of this <see cref="LogContextWithDecorator"/>
         /// </summary>
-        public Mode CurrentMode;
+        public readonly Mode CurrentMode;
 
-        private FixedList512Bytes<PayloadHandle>* List512;
-        private FixedList4096Bytes<PayloadHandle>* List4096;
+        private readonly unsafe FixedList512Bytes<PayloadHandle>* List512;
+        private readonly unsafe FixedList4096Bytes<PayloadHandle>* List4096;
 
         /// <summary>
         /// Lock that was used for this <see cref="LogController"/>. Can be not valid (default) - that means FixedList of <see cref="PayloadHandle"/> is global, not connected to any <see cref="LogController"/>
@@ -45,7 +58,7 @@ namespace Unity.Logging.Internal
         /// <summary>
         /// Returns current Length of PayloadHandles list
         /// </summary>
-        public ushort Length => (ushort)(CurrentMode == Mode.Length512 ? List512->Length : List4096->Length);
+        public ushort Length { get { unsafe { return (ushort)(CurrentMode == Mode.Length512 ? List512->Length : List4096->Length); } } }
 
         /// <summary>
         /// Returns the element at a given index.
@@ -54,10 +67,12 @@ namespace Unity.Logging.Internal
         /// <returns>The list element at the index.</returns>
         public ref PayloadHandle ElementAt(int i)
         {
-            if (CurrentMode == Mode.Length512)
-                return ref List512->ElementAt(i);
-
-            return ref List4096->ElementAt(i);
+            unsafe
+            {
+                if (CurrentMode == Mode.Length512)
+                    return ref List512->ElementAt(i);
+                return ref List4096->ElementAt(i);
+            }
         }
 
         /// <summary>
@@ -66,15 +81,12 @@ namespace Unity.Logging.Internal
         /// <param name="addressOfFixedList"><see cref="PayloadHandle"/>'s list</param>
         /// <param name="lockController"><see cref="LogController"/> lock or default if global</param>
         /// <returns>LogContextWithDecorator struct</returns>
-        public static LogContextWithDecorator From512(FixedList512Bytes<PayloadHandle>* addressOfFixedList, LogControllerScopedLock lockController = default)
+        public unsafe LogContextWithDecorator(FixedList512Bytes<PayloadHandle>* addressOfFixedList, LogControllerScopedLock lockController = default)
         {
-            return new LogContextWithDecorator
-            {
-                CurrentMode = Mode.Length512,
-                List512 = addressOfFixedList,
-                List4096 = null,
-                Lock = lockController
-            };
+            CurrentMode = Mode.Length512;
+            List512 = addressOfFixedList;
+            List4096 = null;
+            Lock = lockController;
         }
 
         /// <summary>
@@ -83,15 +95,12 @@ namespace Unity.Logging.Internal
         /// <param name="addressOfFixedList"><see cref="PayloadHandle"/>'s list</param>
         /// <param name="lockController"><see cref="LogController"/>'s lock or default(<see cref="LogControllerScopedLock"/>) if global</param>
         /// <returns>LogContextWithDecorator struct</returns>
-        public static LogContextWithDecorator From4096(FixedList4096Bytes<PayloadHandle>* addressOfFixedList, LogControllerScopedLock lockController = default)
+        public unsafe LogContextWithDecorator(FixedList4096Bytes<PayloadHandle>* addressOfFixedList, LogControllerScopedLock lockController = default)
         {
-            return new LogContextWithDecorator
-            {
-                CurrentMode = Mode.Length4096,
-                List512 = null,
-                List4096 = addressOfFixedList,
-                Lock = lockController
-            };
+            CurrentMode = Mode.Length4096;
+            List512 = null;
+            List4096 = addressOfFixedList;
+            Lock = lockController;
         }
 
         /// <summary>
@@ -100,10 +109,13 @@ namespace Unity.Logging.Internal
         /// <param name="handle">The element to append at the end of the list.</param>
         public void Add(PayloadHandle handle)
         {
-            if (CurrentMode == Mode.Length512)
-                List512->Add(handle);
-            else
-                List4096->Add(handle);
+            unsafe
+            {
+                if (CurrentMode == Mode.Length512)
+                    List512->Add(handle);
+                else
+                    List4096->Add(handle);
+            }
         }
 
         /// <summary>

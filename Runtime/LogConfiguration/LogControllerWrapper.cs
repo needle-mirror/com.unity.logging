@@ -1,7 +1,11 @@
 //#define DEBUG_DEADLOCKS
-//#define USE_BASELIB
 
-#if ENABLE_UNITY_COLLECTIONS_CHECKS
+#if UNITY_DOTSRUNTIME
+#define USE_BASELIB
+#define USE_BASELIB_FILEIO
+#endif
+
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
 #define DEBUG_ADDITIONAL_CHECKS
 #endif
 
@@ -44,43 +48,95 @@ namespace Unity.Logging.Internal
         /// Creates <see cref="LogControllerScopedLock"/> for the current <see cref="LoggerManager.CurrentLoggerHandle"/> logger. Owns the lock operation
         /// </summary>
         /// <returns>Created <see cref="LogControllerScopedLock"/></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static LogControllerScopedLock Create()
         {
-            LogControllerWrapper.LockRead();
-            return new LogControllerScopedLock(LoggerManager.CurrentLoggerHandle);
+            return CreateLock(LoggerManager.CurrentLoggerHandle, ownsLock: true);
         }
 
         /// <summary>
-        /// Creates <see cref="LogControllerScopedLock"/> for the logger with <see cref="loggerHandle"/>. Owns the lock operation
+        /// Creates <see cref="LogControllerScopedLock"/> for the logger with <see cref="LoggerHandle"/>. Owns the lock operation
         /// </summary>
         /// <param name="loggerHandle"><see cref="LoggerHandle"/> of the logger to create a lock on</param>
         /// <returns>Created <see cref="LogControllerScopedLock"/></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static LogControllerScopedLock Create(LoggerHandle loggerHandle)
         {
-            LogControllerWrapper.LockRead();
-            return new LogControllerScopedLock(loggerHandle);
+            return CreateLock(loggerHandle, ownsLock: true);
         }
 
         /// <summary>
-        /// Creates <see cref="LogControllerScopedLock"/> for the logger with <see cref="loggerHandle"/>. But doesn't own the lock operation. Used in situations when lock is already taken
+        /// Creates <see cref="LogControllerScopedLock"/> for the logger with <see cref="LoggerHandle"/>. But doesn't own the lock operation. Used in situations when lock is already taken
         /// <seealso cref="OwnsLock"/>
         /// </summary>
         /// <param name="loggerHandle"><see cref="LoggerHandle"/> of the logger</param>
         /// <returns>Created <see cref="LogControllerScopedLock"/> with <see cref="OwnsLock"/> == false</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static LogControllerScopedLock CreateAlreadyUnderLock(LoggerHandle loggerHandle)
         {
-            return new LogControllerScopedLock(loggerHandle, ownsLock: 0);
+            return CreateLock(loggerHandle, ownsLock: false);
         }
 
-        private LogControllerScopedLock(LoggerHandle handle, byte ownsLock = 1)
+        [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS"), Conditional("UNITY_DOTS_DEBUG")] // ENABLE_UNITY_COLLECTIONS_CHECKS or UNITY_DOTS_DEBUG
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void ThrowLockHandleMustBeValid()
         {
-            m_OwnsLock = ownsLock;
-            Handle = handle;
-            // this is called under lock
-            m_Index = LogControllerWrapper.GetLogControllerIndexUnderLock(handle);
+            throw new Exception("LoggerHandle is not valid during LogControllerScopedLock creation. Maybe you forgot to initialize it, or destroyed the logger already?");
+        }
 
-            if (m_OwnsLock != 0)
-                GetLogController().MemoryManager.LockRead();
+        [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS"), Conditional("UNITY_DOTS_DEBUG")] // ENABLE_UNITY_COLLECTIONS_CHECKS or UNITY_DOTS_DEBUG
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void ThrowLockHandleWasNotFound()
+        {
+            throw new Exception("LoggerHandle is corrupted or represents disposed logger during LogControllerScopedLock creation. Maybe you destroyed the logger and still using its handler? Or you're logging from a job and logger was disposed in the main thread?");
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static LogControllerScopedLock CreateLock(LoggerHandle loggerHandle, bool ownsLock)
+        {
+            // handle must be valid
+            if (loggerHandle.IsValid == false)
+            {
+                ThrowLockHandleMustBeValid();
+                return default;
+            }
+
+            // we need to lock and find the logger
+            if (ownsLock)
+            {
+                LogControllerWrapper.LockRead();
+            }
+
+            var index = LogControllerWrapper.GetLogControllerIndexUnderLockNoThrow(loggerHandle);
+
+            if (index != -1)
+            {
+                if (ownsLock)
+                {
+                    // logger was found, now we should lock its memory manager (so it cannot call Update)
+                    LogControllerWrapper.GetLogControllerByIndexUnderLock(index).MemoryManager.LockRead();
+                }
+
+                return new LogControllerScopedLock(loggerHandle, (byte)(ownsLock ? 1 : 0), index);
+            }
+
+            // if logger is not valid - unlock
+            if (ownsLock)
+            {
+                LogControllerWrapper.UnlockRead();
+            }
+
+            ThrowLockHandleWasNotFound();
+            return default;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private LogControllerScopedLock(LoggerHandle handle, byte ownsLock, int index)
+        {
+            // Handle must be valid at this point.
+            Handle = handle;
+            m_Index = index;
+            m_OwnsLock = ownsLock;
         }
 
         /// <summary>
@@ -92,8 +148,8 @@ namespace Unity.Logging.Internal
             if (m_OwnsLock != 0)
             {
                 GetLogController().MemoryManager.UnlockRead();
-
                 LogControllerWrapper.UnlockRead();
+                PerThreadData.ThreadLoggerHandle = default;
             }
         }
 
@@ -194,8 +250,8 @@ namespace Unity.Logging.Internal
         private struct SharedLogControllers {}
         private static readonly SharedStatic<UnsafeList<LogController>> s_LogControllers = SharedStatic<UnsafeList<LogController>>.GetOrCreate<UnsafeList<LogController>, SharedLogControllers>(16);
 
-        private struct SharedLogControllersUniqIdCounter {}
-        private static readonly SharedStatic<long> s_LogControllersUniqIdCounter = SharedStatic<long>.GetOrCreate<long, SharedLogControllersUniqIdCounter>(16);
+        private struct SharedLogUniqIdCounter {}
+        private static readonly SharedStatic<uint> s_LogControllersUniqIdCounter = SharedStatic<uint>.GetOrCreate<uint, SharedLogUniqIdCounter>(16);
 
         private struct SharedLogControllersLock {}
         private static readonly SharedStatic<long> s_LogControllersLock = SharedStatic<long>.GetOrCreate<long, SharedLogControllersLock>(16);
@@ -242,10 +298,9 @@ namespace Unity.Logging.Internal
         {
             ThreadGuard.EnsureRunningOnMainThread();
 
-            Lock();
-
             try
             {
+                Lock();
                 if (s_LogControllers.Data.IsCreated && s_LogControllers.Data.IsEmpty == false)
                 {
                     var n = s_LogControllers.Data.Length;
@@ -265,6 +320,8 @@ namespace Unity.Logging.Internal
             {
                 Unlock();
             }
+
+            PerThreadData.Reset();
         }
 
         public static void Remove(in LoggerHandle loggerHandle)
@@ -274,10 +331,9 @@ namespace Unity.Logging.Internal
             CheckLogControllersCreated();
             CheckLoggerHandleIsValid(loggerHandle);
 
-            Lock();
-
             try
             {
+                Lock();
                 var n = s_LogControllers.Data.Length;
                 for (var i = 0; i < n; i++)
                 {
@@ -300,16 +356,17 @@ namespace Unity.Logging.Internal
         {
             ThreadGuard.EnsureRunningOnMainThread();
 
-            Lock();
-
             try
             {
+                Lock();
                 if (s_LogControllers.Data.IsCreated == false)
                 {
                     s_LogControllers.Data = new UnsafeList<LogController>(64, Allocator.Persistent);
                 }
 
-                var uniqId = Interlocked.Increment(ref s_LogControllersUniqIdCounter.Data);
+                var uniqId = ++s_LogControllersUniqIdCounter.Data;
+                if (uniqId == 0)
+                    uniqId = ++s_LogControllersUniqIdCounter.Data;
 
                 var handle = new LoggerHandle(uniqId);
                 s_LogControllers.Data.Add(new LogController(handle, memoryManagerParameters));
@@ -326,10 +383,9 @@ namespace Unity.Logging.Internal
         {
             CheckLogControllersCreated();
 
-            LockRead();
-
             try
             {
+                LockRead();
                 var res = 0;
                 var n = s_LogControllers.Data.Length;
                 for (var i = 0; i < n; i++)
@@ -344,12 +400,8 @@ namespace Unity.Logging.Internal
             }
         }
 
-        public static int GetLogControllerIndexUnderLock(LoggerHandle loggerHandle)
+        public static int GetLogControllerIndexUnderLockNoThrow(LoggerHandle loggerHandle)
         {
-            CheckLoggerHandleIsValid(loggerHandle);
-            MustBeReadLocked(loggerHandle);
-            CheckLogControllersCreated();
-
             var n = s_LogControllers.Data.Length;
             for (var i = 0; i < n; i++)
             {
@@ -359,6 +411,21 @@ namespace Unity.Logging.Internal
                 }
             }
 
+            return -1;
+        }
+
+        public static int GetLogControllerIndexUnderLock(LoggerHandle loggerHandle)
+        {
+            CheckLoggerHandleIsValid(loggerHandle);
+            MustBeReadLocked(loggerHandle);
+            CheckLogControllersCreated();
+
+            var indx = GetLogControllerIndexUnderLockNoThrow(loggerHandle);
+
+            if (indx != -1)
+                return indx;
+
+            var n = s_LogControllers.Data.Length;
             UnityEngine.Debug.LogError(string.Format("Cannot find logger by handle {0} in {1} logControllers:", loggerHandle.Value, n));
             for (var i = 0; i < n; i++)
             {
@@ -392,10 +459,9 @@ namespace Unity.Logging.Internal
             }
             else
             {
-                LockRead();
-
                 try
                 {
+                    LockRead();
                     var foundLoggerToHighlight = false;
                     var res = 0;
                     var n = s_LogControllers.Data.Length;

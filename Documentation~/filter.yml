@@ -6,9 +6,6 @@ apiRules:
       uidRegex: Tests.DOTSRuntime$
       type: Namespace
   - exclude:
-      uidRegex: ^Global Namespace.*
-      type: Namespace
-  - exclude:
       uidRegex: ^LoggingCommon$
       type: Namespace
   - exclude:
@@ -19,4 +16,7 @@ apiRules:
       type: Namespace
   - exclude:
       uidRegex: ^Samples$
+      type: Namespace
+  - exclude:
+      uidRegex: ^Unity\.Logging\.Internal
       type: Namespace

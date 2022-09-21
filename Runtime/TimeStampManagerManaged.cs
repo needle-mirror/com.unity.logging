@@ -1,3 +1,7 @@
+#if UNITY_DOTSRUNTIME || UNITY_2021_2_OR_NEWER
+#define LOGGING_USE_UNMANAGED_DELEGATES // C# 9 support, unmanaged delegates - gc alloc free way to call
+#endif
+
 using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
@@ -6,17 +10,17 @@ using Unity.Burst;
 
 namespace Unity.Logging.Internal
 {
+    [HideInStackTrace]
     public static class TimeStampManagerManaged
     {
         private static byte s_Initialized;
-        private static CaptureTimestampDelegate s_CaptureDelegate;
+
         private static Stopwatch s_Stopwatch;
         private static DateTime s_StopwatchStartTime;
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate long CaptureTimestampDelegate();
         private struct CaptureTimestampDelegateKey {}
-        private static readonly SharedStatic<FunctionPointer<CaptureTimestampDelegate>> s_CaptureMethod = SharedStatic<FunctionPointer<CaptureTimestampDelegate>>.GetOrCreate<FunctionPointer<CaptureTimestampDelegate>, CaptureTimestampDelegateKey>(16);
 
         [BurstDiscard]
         internal static void Initialize()
@@ -25,12 +29,10 @@ namespace Unity.Logging.Internal
                 return;
             s_Initialized = 1;
 
-            s_CaptureDelegate = CaptureDateTimeUTCNanoseconds;
             s_StopwatchStartTime = DateTime.UtcNow;
             s_Stopwatch = Stopwatch.StartNew();
 
-            s_CaptureMethod.Data = new FunctionPointer<CaptureTimestampDelegate>(Marshal.GetFunctionPointerForDelegate(s_CaptureDelegate));
-
+            Burst2ManagedCall<CaptureTimestampDelegate, CaptureTimestampDelegateKey>.Init(CaptureDateTimeUTCNanoseconds);
         }
 
         [AOT.MonoPInvokeCallback(typeof(CaptureTimestampDelegate))]
@@ -42,13 +44,15 @@ namespace Unity.Logging.Internal
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static long GetTimeStamp()
         {
-#if UNITY_2021_2_OR_NEWER // C# 9 support, unmanaged delegates - gc alloc free way to call FunctionPointer
-                unsafe
-                {
-                    return ((delegate * unmanaged[Cdecl] <long>)s_CaptureMethod.Data.Value)();
-                }
+            var ptr = Burst2ManagedCall<CaptureTimestampDelegate, CaptureTimestampDelegateKey>.Ptr();
+
+#if LOGGING_USE_UNMANAGED_DELEGATES
+            unsafe
+            {
+                return ((delegate * unmanaged[Cdecl] <long>)ptr.Value)();
+            }
 #else
-            return s_CaptureMethod.Data.Invoke();
+            return ptr.Invoke();
 #endif
         }
     }

@@ -12,6 +12,7 @@ using System.Threading;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Logging;
 using Unity.Profiling;
+using UnityEngine;
 using UnityEngine.Assertions;
 
 namespace Unity.Logging.Internal
@@ -21,6 +22,7 @@ namespace Unity.Logging.Internal
     /// Contains a special case logic for different runtimes
     /// <seealso cref="ManagedStackTraceWrapper"/>
     /// </summary>
+    [HideInStackTrace]
     public static class StackTraceCapture
     {
         static readonly ProfilerMarker k_StackTraceCapture = new ProfilerMarker($"StackTrace. Capture");
@@ -29,10 +31,10 @@ namespace Unity.Logging.Internal
         static readonly ProfilerMarker k_StackTraceSlowPathCapture = new ProfilerMarker($"StackTrace. Capture (slow path)");
         static readonly ProfilerMarker k_StackTraceSlowPathToString = new ProfilerMarker($"StackTrace. Convert to string  (slow path)");
 
-
         static StackTraceCapture()
         {
             var _ = ReflectionHelper.Initialized;
+            StackTraceDataAnalyzer.GetProjectFolder(); // init current folder
         }
 
         private static ConcurrentBag<StackTraceData> s_StackTracePool;
@@ -65,6 +67,7 @@ namespace Unity.Logging.Internal
             }
         }
 
+        [HideInStackTrace]
         public static StackTraceData GetStackTrace()
         {
             using var marker = k_StackTraceCapture.Auto();
@@ -102,7 +105,7 @@ namespace Unity.Logging.Internal
             private object[] m_Params;
 
             private readonly ReaderWriterLockSlim m_Lock = new ReaderWriterLockSlim(LockRecursionPolicy.NoRecursion);
-            private string m_String;
+            private byte[] m_StringUTF8;
 
             public StackTraceData()
             {
@@ -121,10 +124,11 @@ namespace Unity.Logging.Internal
                 }
 
                 m_Params = new[] { Helper, 0, NeedFileInfo, null };
-                m_String = null;
+                m_StringUTF8 = null;
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            [HideInStackTrace]
             public void Capture()
             {
                 if (ReflectionHelper.Initialized)
@@ -136,7 +140,7 @@ namespace Unity.Logging.Internal
                 {
                     using var marker = k_StackTraceSlowPathCapture.Auto();
 
-                    Helper = new StackTrace(0, NeedFileInfo);
+                    Helper = new SlowStackTraceWrapper();
                 }
             }
 
@@ -146,18 +150,20 @@ namespace Unity.Logging.Internal
                 // 2. We called this - the internal string is creating in some other thread
                 // 3. We can just use the internal string.
 
-                m_Lock.EnterUpgradeableReadLock();
                 try
                 {
-                    if (m_String == null) // Case #1
+                    m_Lock.EnterUpgradeableReadLock();
+                    if (m_StringUTF8 == null) // Case #1
                     {
-                        m_Lock.EnterWriteLock();
                         try
                         {
-                            if (m_String == null) // check again, another thread could just did this. Case #2
+                            m_Lock.EnterWriteLock();
+                            if (m_StringUTF8 == null) // check again, another thread could just did this. Case #2
                             {
                                 var analyzer = new StackTraceDataAnalyzer();
-                                m_String = analyzer.ToString(this);
+                                var str = analyzer.ToString(this);
+
+                                m_StringUTF8 = Encoding.UTF8.GetBytes(str);
                             }
                         }
                         finally
@@ -166,8 +172,16 @@ namespace Unity.Logging.Internal
                         }
                     }
 
-                    Assert.IsNotNull(m_String);
-                    result.Append(m_String); // case #3 (#1 and #2 would also end up in here)
+                    if (m_StringUTF8 != null && m_StringUTF8.Length > 0)
+                    {
+                        unsafe
+                        {
+                            fixed (byte* ptr = &m_StringUTF8[0])
+                            {
+                                result.Append(ptr, m_StringUTF8.Length); // case #3 (#1 and #2 would also end up in here)
+                            }
+                        }
+                    }
                 }
                 finally
                 {
@@ -176,7 +190,7 @@ namespace Unity.Logging.Internal
             }
         }
 
-        internal struct StackTraceDataAnalyzer
+        internal struct StackTraceDataAnalyzer : StackTraceDataAnalyzer.IStackTrace
         {
             private int m_FrameCount;
             private object m_Helper;
@@ -283,64 +297,188 @@ namespace Unity.Logging.Internal
             [ThreadStatic]
             private static StringBuilder s_StringBuilder;
 
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            static int CutLastIndexOf(string s, string substring)
+            internal interface IStackTrace
             {
-                var indx = s.LastIndexOf(substring, StringComparison.Ordinal);
-                if (indx != -1)
-                    indx += substring.Length;
-
-                return indx;
+                int FrameCount { get; }
+                MethodBase GetMethodForFrame(int frameIndex);
+                string GetFileNameForFrame(int frameIndex);
+                int GetFileLineNumberForFrame(int frameIndex);
             }
 
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            static int CutIndexOf(string s, string substring, int startIndex = 0)
+            private static string s_ProjectFolder = "";
+            internal static string GetProjectFolder()
             {
-                var indx = s.IndexOf(substring, startIndex, StringComparison.Ordinal);
-                if (indx != -1)
-                    indx += substring.Length;
+                if (string.IsNullOrEmpty(s_ProjectFolder))
+                {
+                    // A string that contains the absolute path of the current working directory, and does not end with a backslash (\).
+                    s_ProjectFolder = System.IO.Directory.GetCurrentDirectory();
+                    s_ProjectFolder = s_ProjectFolder.Replace("\\", "/");
+                    s_ProjectFolder += "/";
+                }
 
-                return indx;
+                return s_ProjectFolder;
             }
 
-            // Unfortunately we cannot tell how much frames we should skip - on different platforms we have different count + in case of burst enabled we have wrong function names sometimes
-            internal static string CutStackTrace(string stacktraceText)
+            enum HideOption
             {
-                const string loggingCall = "Unity.Logging.Log.";
-                var indx = CutLastIndexOf(stacktraceText, loggingCall);
-                if (indx == -1)
+                NotHide = 0,
+                HideOnlyThis,
+                HideEverythingInside
+            }
+            static HideOption ShouldHideInStackTrace(IEnumerable<Attribute> attributes)
+            {
+                foreach (var customAttribute in attributes)
                 {
-                    indx = CutIndexOf(stacktraceText, ManagedStackTraceWrapper.CaptureStackTraceFuncName2);
+                    if (customAttribute is HideInStackTrace hideAttr)
+                    {
+                        if (hideAttr.HideEverythingInside)
+                            return HideOption.HideEverythingInside;
+                        return HideOption.HideOnlyThis;
+                    }
 
-                    var indx2 = CutIndexOf(stacktraceText, ManagedStackTraceWrapper.CaptureStackTraceFuncName1, indx == -1 ? 0 : indx);
-                    if (indx2 != -1)
-                        indx = indx2;
+                    var attributeName = customAttribute.GetType().Name;
+                    if (attributeName.IndexOf("HideInCallstack", StringComparison.OrdinalIgnoreCase) != -1 ||
+                        attributeName.IndexOf("HideInConsole", StringComparison.OrdinalIgnoreCase) != -1 ||
+                        attributeName.IndexOf("StackTraceHidden", StringComparison.OrdinalIgnoreCase) != -1) // https://docs.microsoft.com/en-us/dotnet/api/system.diagnostics.stacktracehiddenattribute?view=net-6.0
+                    {
+                        return HideOption.HideOnlyThis;
+                    }
                 }
 
-                if (indx != -1)
+                return HideOption.NotHide;
+            }
+
+            internal static void FormatStackTrace<T>(T stackTrace, StringBuilder sb) where T : IStackTrace
+            {
+                // need to skip over "n" frames which represent the
+                // System.Diagnostics package frames
+                var iIndexCount = stackTrace.FrameCount;
+                for (var iIndex = 0; iIndex < iIndexCount; iIndex++)
                 {
-                    var indxNewLine = CutIndexOf(stacktraceText, "\n", indx);
-                    if (indxNewLine != -1)
-                        indx = indxNewLine;
+                    var mb = stackTrace.GetMethodForFrame(iIndex);
+                    if (mb == null)
+                        continue;
 
-                    stacktraceText = stacktraceText.Substring(indx);
+                    var hideOption = ShouldHideInStackTrace(mb.GetCustomAttributes());
+                    switch (hideOption)
+                    {
+                        case HideOption.HideEverythingInside:
+                            sb.Clear();
+                            continue;
+                        case HideOption.HideOnlyThis:
+                            continue;
+                    }
+
+                    Type classType = mb.DeclaringType;
+                    if (classType == null)
+                        continue;
+
+                    hideOption = ShouldHideInStackTrace(classType.GetCustomAttributes());
+                    switch (hideOption)
+                    {
+                        case HideOption.HideEverythingInside:
+                            sb.Clear();
+                            continue;
+                        case HideOption.HideOnlyThis:
+                            continue;
+                    }
+
+                    if (classType.DeclaringType != null)
+                    {
+                        hideOption = ShouldHideInStackTrace(classType.DeclaringType.GetCustomAttributes());
+                        switch (hideOption)
+                        {
+                            case HideOption.HideEverythingInside:
+                                sb.Clear();
+
+                                continue;
+                            case HideOption.HideOnlyThis:
+                                continue;
+                        }
+                    }
+
+                    // Add namespace.classname:MethodName
+                    String ns = classType.Namespace;
+                    if (!string.IsNullOrEmpty(ns))
+                    {
+                        sb.Append(ns);
+                        sb.Append(".");
+                    }
+
+                    sb.Append(classType.Name);
+                    sb.Append(":");
+                    sb.Append(mb.Name);
+                    sb.Append("(");
+
+                    // Add parameters
+                    int j = 0;
+                    ParameterInfo[] pi = mb.GetParameters();
+                    bool fFirstParam = true;
+                    while (j < pi.Length)
+                    {
+                        if (fFirstParam == false)
+                            sb.Append(", ");
+                        else
+                            fFirstParam = false;
+
+                        sb.Append(pi[j].ParameterType.Name);
+                        j++;
+                    }
+                    sb.Append(")");
+
+                    // Add path name and line number - unless it is a Debug.Log call, then we are only interested
+                    // in the calling frame.
+                    string path = stackTrace.GetFileNameForFrame(iIndex);
+                    if (path != null)
+                    {
+                        bool shouldStripLineNumbers =
+                            (classType.Name == "Debug" && classType.Namespace == "UnityEngine") ||
+                            (classType.Name == "Logger" && classType.Namespace == "UnityEngine") ||
+                            (classType.Name == "DebugLogHandler" && classType.Namespace == "UnityEngine") ||
+                            (classType.Name == "Assert" && classType.Namespace == "UnityEngine.Assertions") ||
+                            (mb.Name == "print" && classType.Name == "MonoBehaviour" && classType.Namespace == "UnityEngine")
+                        ;
+
+                        if (!shouldStripLineNumbers)
+                        {
+                            sb.Append(" (at ");
+
+                            var projectFolder = GetProjectFolder();
+                            if (!string.IsNullOrEmpty(projectFolder))
+                            {
+                                if (path.Replace("\\", "/").StartsWith(projectFolder))
+                                {
+                                    path = path.Substring(projectFolder.Length, path.Length - projectFolder.Length);
+                                }
+                            }
+
+                            sb.Append(path);
+                            sb.Append(":");
+                            sb.Append(stackTrace.GetFileLineNumberForFrame(iIndex));
+                            sb.Append(")");
+                        }
+                    }
+
+                    sb.Append("\n");
                 }
-
-                return stacktraceText;
             }
 
             public string ToString(StackTraceData data)
             {
+                if (s_StringBuilder == null)
+                    s_StringBuilder = new StringBuilder(1024);
+                else
+                    s_StringBuilder.Clear();
+
                 if (ReflectionHelper.Initialized == false)
                 {
                     using var marker = k_StackTraceSlowPathToString.Auto();
 
                     // slow stacktrace in data.Helper
-                    if (data.Helper is StackTrace slowStackTrace)
+                    if (data.Helper is SlowStackTraceWrapper slowStackTrace)
                     {
-                        var stacktraceText = slowStackTrace.ToString();
-
-                        return CutStackTrace(stacktraceText);
+                        FormatStackTrace(slowStackTrace, s_StringBuilder);
+                        return s_StringBuilder.ToString();
                     }
 
                     return "<No stacktrace>";
@@ -349,106 +487,37 @@ namespace Unity.Logging.Internal
                 if (Analyze(data.Helper) == false)
                     return "<Failed to analyze the stacktrace>";
 
-                if (s_StringBuilder == null)
-                    s_StringBuilder = new StringBuilder(1024);
-                else
-                    s_StringBuilder.Clear();
-
-                var displayFilenames = StackTraceData.NeedFileInfo;
-                var fFirstFrame = true;
-                var n = GetNumberOfFrames();
-                for (var i = 0; i < n; i++)
-                {
-                    var mb = GetMethodBase(i);
-
-                    if (mb != null)
-                    {
-                        // We want a newline at the end of every line except for the last
-                        if (fFirstFrame)
-                            fFirstFrame = false;
-                        else
-                            s_StringBuilder.Append(Environment.NewLine);
-
-                        s_StringBuilder.Append((FixedString32Bytes)"   at ");
-
-                        var t = mb.DeclaringType;
-                        // if there is a type (non global method) print it
-                        if (t != null)
-                        {
-                            s_StringBuilder.Append(t.FullName.Replace('+', '.'));
-                            s_StringBuilder.Append('.');
-                        }
-
-                        s_StringBuilder.Append(mb.Name);
-
-                        // deal with the generic portion of the method
-                        if (mb is MethodInfo info && info.IsGenericMethod)
-                        {
-                            s_StringBuilder.Append('[');
-
-                            var fFirstTyParam = true;
-                            foreach (var type in info.GetGenericArguments())
-                            {
-                                if (fFirstTyParam == false)
-                                    s_StringBuilder.Append(',');
-                                else
-                                    fFirstTyParam = false;
-
-                                s_StringBuilder.Append(type.Name);
-                            }
-
-                            s_StringBuilder.Append(']');
-                        }
-
-                        // arguments printing
-                        s_StringBuilder.Append('(');
-                        var fFirstParam = true;
-                        foreach (var t1 in mb.GetParameters())
-                        {
-                            if (fFirstParam == false)
-                                s_StringBuilder.Append(", ");
-                            else
-                                fFirstParam = false;
-
-                            var typeName = t1.ParameterType.Name;
-                            s_StringBuilder.Append(typeName + " " + t1.Name);
-                        }
-
-                        s_StringBuilder.Append(')');
-
-                        // source location printing
-                        if (displayFilenames && m_RgiIlOffsetArr[i] != -1)
-                        {
-                            // If we don't have a PDB or PDB-reading is disabled for the module,
-                            // then the file name will be null.
-                            string fileName = null;
-
-                            // Getting the filename from a StackFrame is a privileged operation - we won't want
-                            // to disclose full path names to arbitrarily untrusted code.  Rather than just omit
-                            // this we could probably trim to just the filename so it's still mostly useful.
-                            try
-                            {
-                                fileName = m_RgFilenameArr[i];
-                            }
-                            catch (SecurityException)
-                            {
-                                // If the demand for displaying filenames fails, then it won't
-                                // succeed later in the loop.  Avoid repeated exceptions by not trying again.
-                                displayFilenames = false;
-                            }
-
-                            if (fileName != null)
-                            {
-                                s_StringBuilder.Append(" in ");
-                                s_StringBuilder.Append(fileName);
-                                s_StringBuilder.Append(":line ");
-                                s_StringBuilder.Append(m_RgiLineNumberArr[i]);
-                            }
-                        }
-                    }
-                }
-
+                FormatStackTrace(this, s_StringBuilder);
                 return s_StringBuilder.ToString();
+            }
+
+            public int FrameCount => m_FrameCount;
+
+            public MethodBase GetMethodForFrame(int frameIndex)
+            {
+                return GetMethodBase(frameIndex);
+            }
+
+            public string GetFileNameForFrame(int frameIndex)
+            {
+                // Getting the filename from a StackFrame is a privileged operation - we won't want
+                // to disclose full path names to arbitrarily untrusted code.  Rather than just omit
+                // this we could probably trim to just the filename so it's still mostly useful.
+                try
+                {
+                    return m_RgFilenameArr[frameIndex];
+                }
+                catch (SecurityException)
+                {
+                    // If the demand for displaying filenames fails, then it won't
+                    // succeed later in the loop.  Avoid repeated exceptions by not trying again.
+                    return "???";
+                }
+            }
+
+            public int GetFileLineNumberForFrame(int frameIndex)
+            {
+                return m_RgiLineNumberArr[frameIndex];
             }
         }
 
@@ -594,6 +663,28 @@ namespace Unity.Logging.Internal
 
                 return true;
             }
+        }
+    }
+
+    public class SlowStackTraceWrapper : StackTrace, StackTraceCapture.StackTraceDataAnalyzer.IStackTrace
+    {
+        public SlowStackTraceWrapper() : base(1, true)
+        {
+        }
+
+        public MethodBase GetMethodForFrame(int frameIndex)
+        {
+            return GetFrame(frameIndex).GetMethod();
+        }
+
+        public string GetFileNameForFrame(int frameIndex)
+        {
+            return GetFrame(frameIndex).GetFileName();
+        }
+
+        public int GetFileLineNumberForFrame(int frameIndex)
+        {
+            return GetFrame(frameIndex).GetFileLineNumber();
         }
     }
 }

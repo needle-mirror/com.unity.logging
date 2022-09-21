@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using SourceGenerator.Logging;
@@ -7,42 +8,92 @@ namespace MainLoggingGenerator.Extractors
 {
     public static class StructFieldExtractor
     {
-        public static LogStructureFieldData Extract(GeneratorExecutionContext m_Context,
+        static bool ShouldIgnore(ISymbol symbol, out string rename)
+        {
+            rename = null;
+            var attributes = symbol.GetAttributes();
+            foreach (var a in attributes)
+            {
+                var s = a.AttributeClass?.ToString();
+
+                if (s.Contains(".NonSerializedAttribute") || s == "Unity.Logging.NotLogged")
+                    return true;
+
+                if (s == "Unity.Logging.LogWithName")
+                {
+                    try
+                    {
+                        if (a.ConstructorArguments.Length > 0)
+                            rename = (string)a.ConstructorArguments[0].Value;
+                    }
+                    catch
+                    {
+                        rename = null;
+                    }
+                }
+
+            }
+
+            return false;
+        }
+
+        public static LogStructureFieldData Extract(GeneratorExecutionContext ctx,
             LogTypesGenerator gen, IFieldSymbol field, LogCallArgumentData argument)
         {
-            LogStructureFieldData data = default;
+            // we skip [NonSerialized] fields
+            if (ShouldIgnore(field, out var rename))
+                return default;
 
             // Only value types fields are currently supported; reference types are ignored
             if (field.Type.IsRefLikeType)
             {
-                m_Context.LogCompilerWarningReferenceType(argument.Expression);
+                ctx.LogCompilerWarningReferenceType(argument.Expression);
                 return default;
             }
-
-            // // Make sure it's actually a value type
-            // // Docs: ...for an unconstrained type parameter, IsReferenceType and IsValueType will both return false.
-            // if (!field.Type.IsValueType)
-            // {
-            //     m_Context.LogCompilerErrorCannotUseField(field, argument.Expression.GetLocation());
-            //     return default;
-            // }
 
             if (field.Type.TypeKind == TypeKind.Enum)
             {
-                m_Context.LogCompilerWarningEnumUnsupportedAsField(argument.Expression, field);
+                ctx.LogCompilerWarningEnumUnsupportedAsField(argument.Expression, field);
                 return default;
             }
 
-            if (field.DeclaredAccessibility != Accessibility.Public)
-            {
-                m_Context.LogCompilerWarningNotPublic(argument.Expression);
-                return default;
-            }
+            bool isProperty = field.AssociatedSymbol != null;
 
-            if (!field.CanBeReferencedByName)
+            // from https://docs.microsoft.com/en-us/dotnet/api/microsoft.codeanalysis.ifieldsymbol.associatedsymbol?view=roslyn-dotnet-4.2.0
+            // a backing variable for an automatically generated property or a field-like event, returns that property/event
+            // basically means <getSetterProperty>k__BackingField for public FixedString32Bytes getSetterProperty {get; set;}
+            if (isProperty)
             {
-                // Silently ignore; this should always be true for fields and so the check may be unnecessary
-                return default;
+                if (field.AssociatedSymbol is IPropertySymbol prop)
+                {
+                    if (prop.GetMethod == null)
+                        return default; // cannot get the value, ignore property silently
+
+                    if (ShouldIgnore(prop, out var rename2))
+                        return default;
+
+                    rename ??= rename2;
+
+                    if (prop.GetMethod.DeclaredAccessibility != Accessibility.Public && prop.GetMethod.DeclaredAccessibility != Accessibility.Internal)
+                    {
+                        // Silently ignore private/protected properties
+                        return default;
+                    }
+                }
+            }
+            else
+            {
+                if (field.DeclaredAccessibility != Accessibility.Public && field.DeclaredAccessibility != Accessibility.Internal)
+                {
+                    // Silently ignore private/protected fields
+                    return default;
+                }
+
+                if (!field.CanBeReferencedByName)
+                {
+                    // Silently ignore; this should always be true for fields and so the check may be unnecessary
+                    return default;
+                }
             }
 
             // Handle field according to special type:
@@ -68,8 +119,10 @@ namespace MainLoggingGenerator.Extractors
                 case SpecialType.System_UInt64:
                 case SpecialType.System_UIntPtr:
 
-                    data = new LogStructureFieldData(field, "");
-                    break;
+                    return LogStructureFieldData.SpecialType(field, rename);
+
+                case SpecialType.System_String:
+                    return  LogStructureFieldData.SystemString(field, rename);
 
                 // A value type without any SpecialType should be a struct
                 // Attempt to generate or retrieve struct data for this field (recursively) and use that to initialize the field,
@@ -78,26 +131,21 @@ namespace MainLoggingGenerator.Extractors
                 // NOTE: Fields with an "opaque" struct type must be tagged with a Formatter in order to actually output text.
                 case SpecialType.None:
 
-                    if (LogTypesGenerator.ExtractLogCallStructureInstance(gen, field.Type, default, out var structData))
+                    if (LogTypesGenerator.ExtractLogCallStructureInstance(ctx, gen, field.Type, default, out var structData))
                     {
-                        data = new LogStructureFieldData(field, structData.GeneratedTypeName);
+                        return LogStructureFieldData.MirrorStruct(field, structData.GeneratedTypeName, rename);
                     }
-                    else
-                    {
-                        // TODO: Need to check if the field and/or type has a custom Formatter or not, if it doesn't and we don't provide a default Formatter for
-                        // the type, then exclude it from the generated struct data. There's no point paying the memory cost for data that won't contribute any log output.
-                        data = new LogStructureFieldData(field, "");
-                    }
-                    break;
+
+                    // TODO: Need to check if the field and/or type has a custom Formatter or not, if it doesn't and we don't provide a default Formatter for
+                    // the type, then exclude it from the generated struct data. There's no point paying the memory cost for data that won't contribute any log output.
+                    return new LogStructureFieldData(field, "", rename);
 
                 default:
                 {
-                    m_Context.LogCompilerErrorUnsupportedField(field, argument.Expression.GetLocation());
+                    ctx.LogCompilerErrorUnsupportedField(field, argument.Expression.GetLocation());
                     return default;
                 }
             }
-
-            return data;
         }
     }
 }

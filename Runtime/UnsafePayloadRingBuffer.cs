@@ -36,13 +36,15 @@ namespace Unity.Logging
 
         private volatile uint        m_BytesAllocated;
 
+        private volatile uint        m_BytesAllocatedMax;
+
         /// <summary>
         /// Provides thread safety for the low-level allocation and release
         /// </summary>
         internal SpinLockReadWrite   m_AllocationLock;
 
 
-#if ENABLE_UNITY_COLLECTIONS_CHECKS
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
         // These safety handles control read/write access for returned NativeArray "views"
         internal AtomicSafetyHandle  m_BlockReadOnlyHandle;
         internal AtomicSafetyHandle  m_BlockReadWriteHandle;
@@ -85,6 +87,11 @@ namespace Unity.Logging
         public uint BytesAllocated => m_BytesAllocated;
 
         /// <summary>
+        /// Max value of <see cref="BytesAllocated"/> that was registered.
+        /// </summary>
+        public uint BytesAllocatedMax => m_BytesAllocatedMax;
+
+        /// <summary>
         /// Returns true if RingBuffer is initialized and not Disposed.
         /// </summary>
         public bool IsCreated => m_Buffer != null;
@@ -111,7 +118,7 @@ namespace Unity.Logging
         /// <param name="allocator">Memory pool to allocate the containers from.</param>
         public UnsafePayloadRingBuffer(uint capacity, byte bufferId, Allocator allocator = Allocator.Persistent)
         {
-#if ENABLE_UNITY_COLLECTIONS_CHECKS
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
             // Native allocation is only valid for Temp, Job and Persistent.
             if (allocator <= Allocator.None || allocator > Allocator.Persistent)
                 throw new ArgumentException("Allocator must be Temp, TempJob or Persistent", nameof(allocator));
@@ -137,6 +144,7 @@ namespace Unity.Logging
             m_Fence = (int)capacity - 1;
             BufferId = bufferId;
             m_BytesAllocated = 0;
+            m_BytesAllocatedMax = 0;
 
             m_AllocationLock = new SpinLockReadWrite(Allocator.Persistent);
         }
@@ -152,7 +160,7 @@ namespace Unity.Logging
             if (!IsCreated)
                 return;
 
-#if ENABLE_UNITY_COLLECTIONS_CHECKS
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
 
             if (!UnsafeUtility.IsValidAllocator(m_Allocator))
                 throw new InvalidOperationException("The RingBuffer can not be Disposed because it was not allocated with a valid allocator.");
@@ -163,18 +171,15 @@ namespace Unity.Logging
             // Even though RingBuffer is "Unsafe" we'll at least ensure we don't free the memory
             // while in the process of allocating/releasing a payload block
 
-            using (var _ = new SpinLockReadWrite.ScopedExclusiveLock(m_AllocationLock))
-            {
-                UnsafeUtility.Free(m_Buffer, m_Allocator);
-                m_Buffer = null;
-                m_Capacity = 0;
-                m_Head = 0;
-                m_Tail = 0;
-                m_Fence = 0;
-                m_BytesAllocated = 0;
-            }
-
             m_AllocationLock.Dispose();
+            UnsafeUtility.Free(m_Buffer, m_Allocator);
+            m_Buffer = null;
+            m_Capacity = 0;
+            m_Head = 0;
+            m_Tail = 0;
+            m_Fence = 0;
+            m_BytesAllocated = 0;
+            m_BytesAllocatedMax = 0;
         }
 
         /// <summary>
@@ -183,7 +188,7 @@ namespace Unity.Logging
         public const uint AlignTo = 8;
 
         /// <summary>
-        /// Changes <see cref="requestedSize"/> to the size that is aligned to <see cref="AlignTo"/> bytes
+        /// Changes the input size to the size that is aligned to <see cref="AlignTo"/> bytes
         /// </summary>
         /// <param name="requestedSize">Input size to align</param>
         /// <returns>Aligned size</returns>
@@ -209,7 +214,7 @@ namespace Unity.Logging
         /// <returns>True if allocation was successful and false if not</returns>
         public bool AllocatePayload(uint requestedSize, out PayloadHandle payloadHandle, out NativeArray<byte> payloadArray, bool disjointedBuffer = false)
         {
-#if ENABLE_UNITY_COLLECTIONS_CHECKS
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
             if (requestedSize < MinimumPayloadSize || requestedSize > MaximumPayloadSize)
             {
                 Internal.Debug.SelfLog.OnFailedToAllocatePayloadBecauseOfItsSize(requestedSize);
@@ -230,7 +235,7 @@ namespace Unity.Logging
                 return false;
             }
 
-#if ENABLE_UNITY_COLLECTIONS_CHECKS
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
             {
                 var ptr = new IntPtr(payloadBlock).ToInt64();
                 if (ptr % AlignTo != 0)
@@ -268,7 +273,7 @@ namespace Unity.Logging
             // Create a NativeArray as a view into this new block, which is passed out to the user
             // This array is given read/write access automatically, but by default arrays retrieved later (using the handle) will be read only
             payloadArray = NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<byte>(payload, (int)requestedSize, Allocator.Invalid);
-#if ENABLE_UNITY_COLLECTIONS_CHECKS
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
             NativeArrayUnsafeUtility.SetAtomicSafetyHandle(ref payloadArray, m_BlockReadWriteHandle);
 #endif
             return true;
@@ -317,7 +322,7 @@ namespace Unity.Logging
 
             do
             {
-#if ENABLE_UNITY_COLLECTIONS_CHECKS
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
                 // Validate the size is correct, again if not something is very wrong
                 if (currHeader->PayloadSize > MaximumPayloadSize)
                     throw new InvalidOperationException("Logging RingBuffer has hit an invalid state with Payload allocations.");
@@ -376,7 +381,7 @@ namespace Unity.Logging
 
             // Payload block handle is good; create a NativeArray to reference into the Payload and set read/write access according to passed in parameter
             blockArray = NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<byte>(payload, header->PayloadSize, Allocator.None);
-#if ENABLE_UNITY_COLLECTIONS_CHECKS
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
             NativeArrayUnsafeUtility.SetAtomicSafetyHandle(ref blockArray, readWriteAccess ? m_BlockReadWriteHandle : m_BlockReadOnlyHandle);
 #endif
             return true;
@@ -442,6 +447,9 @@ namespace Unity.Logging
                 // SpinLockExclusive makes this atomic
                 m_BytesAllocated += size;
 
+                if (m_BytesAllocatedMax < m_BytesAllocated)
+                    m_BytesAllocatedMax = m_BytesAllocated;
+
                 var newValue = Interlocked.Increment(ref m_VersionCounter);
                 version = unchecked((ulong) newValue);
 
@@ -498,7 +506,7 @@ namespace Unity.Logging
         }
 
         /// <summary>
-        /// Debug function that returns details about particular <see cref="blockHandle"/>
+        /// Debug function that returns details about a particular <see cref="PayloadHandle"/>.
         /// </summary>
         /// <param name="blockHandle"><see cref="PayloadHandle"/> to analyze</param>
         /// <returns><see cref="FixedString4096Bytes"/> with the details</returns>
@@ -635,6 +643,7 @@ namespace Unity.Logging
     internal struct PayloadBlockHeader
     {
         public const uint HeaderSize = UnsafePayloadRingBuffer.AlignTo;
+
         /// <summary>
         /// Size of the memory block requested by the user, i.e. Payload
         /// </summary>

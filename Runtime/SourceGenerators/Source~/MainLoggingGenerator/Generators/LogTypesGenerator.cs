@@ -41,7 +41,7 @@ namespace SourceGenerator.Logging
                 m_LocalTypeId = 1,
             };
 
-            var extractStructTypesResult = generator.ExtractLogCallStructureTypesData(out var data);
+            var extractStructTypesResult = generator.ExtractLogCallStructureTypesData(context, out var data);
             if (extractStructTypesResult)
             {
                 generatedTypesCode = LogTypesEmitter.Emit(context, data);
@@ -54,7 +54,7 @@ namespace SourceGenerator.Logging
             return true;
         }
 
-        private bool ExtractLogCallStructureTypesData(out LogStructureTypesData typesData)
+        private bool ExtractLogCallStructureTypesData(GeneratorExecutionContext context, out LogStructureTypesData typesData)
         {
             using var _ = new Profiler.Auto("LogTypesGenerator.ExtractLogCallStructureTypesData");
 
@@ -63,7 +63,9 @@ namespace SourceGenerator.Logging
                 m_CurrentCallKind = level.Key;
                 foreach (var arg in level.Value)
                 {
-                    ExtractLogCallStructureInstance(this, arg.Symbol, arg, out var _);
+                    context.CancellationToken.ThrowIfCancellationRequested();
+
+                    ExtractLogCallStructureInstance(context, this, arg.Symbol, arg, out var _);
                 }
             }
 
@@ -72,7 +74,7 @@ namespace SourceGenerator.Logging
             return typesData.IsValid;
         }
 
-        public static bool ExtractLogCallStructureInstance(LogTypesGenerator gen, in ITypeSymbol structSymbol, LogCallArgumentData argData, out LogStructureDefinitionData structData)
+        public static bool ExtractLogCallStructureInstance(GeneratorExecutionContext ctx, LogTypesGenerator gen, in ITypeSymbol structSymbol, LogCallArgumentData argData, out LogStructureDefinitionData structData)
         {
             using var _ = new Profiler.Auto("LogTypesGenerator.ExtractLogCallStructureInstance");
 
@@ -103,7 +105,12 @@ namespace SourceGenerator.Logging
 
             structData = default;
 
-            if (FixedStringUtils.IsSpecialSerializableType(structSymbol))
+            if (argData.IsConvertibleToString)
+            {
+                return false; // don't add to struct registry
+            }
+
+            if (FixedStringUtils.IsSpecialSerializableType(structSymbol) || structSymbol.SpecialType == SpecialType.System_String)
             {
                 return false; // don't add to struct registry
             }
@@ -128,20 +135,20 @@ namespace SourceGenerator.Logging
             }
 
             List<IFieldSymbol> fields = null;
-            if (structSymbol.IsTupleType)
+            if (structSymbol.IsTupleType && structSymbol is INamedTypeSymbol namedTypeSymbol)
             {
-                fields = (structSymbol as INamedTypeSymbol).TupleElements.Where(f => f.IsStatic == false).ToList();
+                fields = namedTypeSymbol.TupleElements.Where(f => f.IsStatic == false).ToList();
             }
             else
             {
                 // Get the members from this struct and query all the "Fields", then cast each value from ISymbol to an IFieldSymbol;
-                fields = structSymbol.GetMembers().Where(m => m.Kind == SymbolKind.Field).Select(f => f as IFieldSymbol).Where(f => f.IsStatic == false).ToList();
+                fields = structSymbol.GetMembers().Where(m => m.Kind == SymbolKind.Field).OfType<IFieldSymbol>().Where(f => f.IsStatic == false).ToList();
             }
 
             var fieldDataList = new List<LogStructureFieldData>(fields.Count);
             foreach (var f in fields)
             {
-                using var _f = new Profiler.Auto("LogTypesGenerator.StructFieldExtractor.Extract");
+                using var scope = new Profiler.Auto("LogTypesGenerator.StructFieldExtractor.Extract");
 
                 var fieldData = StructFieldExtractor.Extract(gen.m_Context, gen, f, argData);
                 if (fieldData.IsValid)
@@ -150,8 +157,17 @@ namespace SourceGenerator.Logging
                 }
             }
 
-            // TODO: We could also (potentially) include "get" Properties from the user-defined typed,
-            // which we'll convert to fields in the generated type
+            var hashSetNames = new HashSet<string>();
+            foreach (var field in fieldDataList)
+            {
+                if (hashSetNames.Add(field.PropertyNameForSerialization) == false)
+                {
+                    var conflictingSymbols = fieldDataList.Where(f => f.PropertyNameForSerialization == field.PropertyNameForSerialization).Select(f => f.Symbol).ToArray();
+
+                    ctx.LogCompilerErrorFieldNameConflict(conflictingSymbols, field.PropertyNameForSerialization);
+                    return false;
+                }
+            }
 
             structData = new LogStructureDefinitionData(gen.m_AssemblyHash, structSymbol, gen.m_LocalTypeId++, argData, fieldDataList);
 

@@ -22,66 +22,54 @@ namespace MainLoggingGenerator.Extractors
             LogCallMessageData data = default;
             var messageOmitted = false;
 
-            var expectedToBeBurstable = true;
-
             if (expression is InterpolatedStringExpressionSyntax interpolatedString)
             {
                 if (interpolatedString.Contents.Count == 1 && interpolatedString.Contents[0] is InterpolatedStringTextSyntax justText)
                 {
                     // this is interpolated string, but without any holes. use it as a string literal
                     var messageText = justText.ToString();
-                    data = LogCallMessageData.LiteralAsFixedString(typeSymbol, expression, FixedStringUtils.GetSmallestFixedStringTypeForMessage(messageText, m_Context), messageText);
+                    data = LogCallMessageData.LiteralAsFixedString(typeSymbol, expression, messageText);
                 }
                 else
                 {
-                    // Message parameter is a managed string and can still be used (not Burstable)
                     data = new LogCallMessageData(typeSymbol, expression, "string", null);
-                    expectedToBeBurstable = false;
                 }
             }
             else if (expression.Kind() == SyntaxKind.StringLiteralExpression)
             {
                 // Typically the log message is a string literal which can be extracted from the syntax tree
                 var messageText = (expression as LiteralExpressionSyntax).Token.ValueText;
-                data = LogCallMessageData.LiteralAsFixedString(typeSymbol, expression, FixedStringUtils.GetSmallestFixedStringTypeForMessage(messageText, m_Context), messageText);
+                data = LogCallMessageData.LiteralAsFixedString(typeSymbol, expression, messageText);
             }
             else if (typeSymbol != null)
             {
                 if (typeSymbol.IsValueType && LogMethodGenerator.IsValidFixedStringType(m_Context, typeSymbol, out var fsType))
                 {
                     // Message parameter is already a FixedString and can be used as-is
-                    data = LogCallMessageData.LiteralAsFixedString(typeSymbol, expression, fsType, null);
+                    data = LogCallMessageData.FixedString(typeSymbol, expression, fsType);
+                }
+                else if (typeSymbol.IsValueType && FixedStringUtils.IsNativeOrUnsafeText(typeSymbol.Name))
+                {
+                    // UnsafeText or NativeText as a message
+                    data = new LogCallMessageData(typeSymbol, expression, typeSymbol.Name, null);
                 }
                 else if (typeSymbol.SpecialType == SpecialType.System_String)
                 {
-                    // Message parameter is a managed string and can still be used (not Burstable)
+                    // Message parameter is a managed string and will be converted to a Burstable copy in payload buffer
                     data = new LogCallMessageData(typeSymbol, expression, "string", null);
-                    expectedToBeBurstable = false;
                 }
-                else if (typeSymbol.IsReferenceType)
-                {
-                    // Message parameter is some other reference type and can be used via a ToString() (not burstable)
-                    data = new LogCallMessageData(typeSymbol, expression, "object", null);
-                    expectedToBeBurstable = false;
-                }
-                else if (typeSymbol.IsValueType)
+                else
                 {
                     // Assuming message has been omitted so just use a placeholder value for now
-                    data = new LogCallMessageData(typeSymbol, expression, "FixedString32Bytes", "");
+                    data = new LogCallMessageData(typeSymbol, expression, "string", null);
                     messageOmitted = true;
                 }
             }
             else
             {
                 m_Context.LogCompilerErrorInvalidArgument(typeInfo, expression);
-                expectedToBeBurstable = false;
 
                 data = new LogCallMessageData();
-            }
-
-            if (expectedToBeBurstable != data.IsBurstable)
-            {
-                throw new Exception("Internal error. IsBurstable detection failed");
             }
 
             return (data, messageOmitted);

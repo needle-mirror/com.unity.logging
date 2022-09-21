@@ -1,3 +1,7 @@
+#if UNITY_DOTSRUNTIME || UNITY_2021_2_OR_NEWER
+#define LOGGING_USE_UNMANAGED_DELEGATES // C# 9 support, unmanaged delegates - gc alloc free way to call
+#endif
+
 using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -18,6 +22,7 @@ namespace Unity.Logging.Internal
     /// <summary>
     /// Structure that stores time stamp for the <see cref="LogMessage"/>
     /// </summary>
+    [HideInStackTrace]
     public struct TimeStampWrapper
     {
         /// <summary>
@@ -50,7 +55,6 @@ namespace Unity.Logging.Internal
                     GCHandle.Alloc(handler);
                     func = new FunctionPointer<CustomGetTimestampHandler>(Marshal.GetFunctionPointerForDelegate(handler));
                 }
-
                 func.Invoke(); // warmup
 
                 s_GetTimestampHandler.Data = func;
@@ -63,11 +67,10 @@ namespace Unity.Logging.Internal
         }
 
         /// <summary>
-        /// Function that calculates difference in milliseconds between <see cref="sinceTimestamp"/> and 'now' (to get 'now' it calls <see cref="GetTimeStamp"/>).
-        /// Timestamps are in nanoseconds
+        /// Calculates the difference in milliseconds between a given timestamp in nanoseconds and <see cref="GetTimeStamp"/>.
         /// </summary>
-        /// <param name="sinceTimestamp">Timestamp to calculate the difference with</param>
-        /// <returns>Milliseconds between <see cref="sinceTimestamp"/> and 'now'</returns>
+        /// <param name="sinceTimestamp">Timestamp in nanoseconds to calculate the difference with</param>
+        /// <returns>Milliseconds between given timestamp and <see cref="GetTimeStamp"/>.</returns>
         public static long TotalMillisecondsSince(long sinceTimestamp)
         {
             var now = GetTimeStamp();
@@ -83,16 +86,6 @@ namespace Unity.Logging.Internal
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         internal delegate void ToFixedStringFileNameDelegate(long timestamp, ref FixedString64Bytes result);
-
-        // make sure delegates are not collected by GC
-        private static ToUnsafeTextTimestampDelegate s_ToUnsafeTextDelegate;
-        private static ToFixedStringFileNameDelegate s_ToFixedStringFileNameDelegate;
-
-        private struct ToUnsafeTextTimestampDelegateKey {}
-        internal static readonly SharedStatic<FunctionPointer<ToUnsafeTextTimestampDelegate>> s_ToUnsafeTextMethod = SharedStatic<FunctionPointer<ToUnsafeTextTimestampDelegate>>.GetOrCreate<FunctionPointer<ToUnsafeTextTimestampDelegate>, ToUnsafeTextTimestampDelegateKey>(16);
-
-        private struct ToFixedStringFileNameDelegateKey {}
-        internal static readonly SharedStatic<FunctionPointer<ToFixedStringFileNameDelegate>> s_ToFixedStringFileNameMethod = SharedStatic<FunctionPointer<ToFixedStringFileNameDelegate>>.GetOrCreate<FunctionPointer<ToFixedStringFileNameDelegate>, ToFixedStringFileNameDelegateKey>(16);
 
         private static byte s_Initialized = 0;
 
@@ -146,15 +139,12 @@ namespace Unity.Logging.Internal
 
             TimeStampManager.Initialize();
 
-            s_ToUnsafeTextDelegate = ToUnsafeTextTimeUTC;
-            s_ToFixedStringFileNameDelegate = ToFixedStringFileName;
-
-            s_ToUnsafeTextMethod.Data = new FunctionPointer<ToUnsafeTextTimestampDelegate>(Marshal.GetFunctionPointerForDelegate(s_ToUnsafeTextDelegate));
-            s_ToFixedStringFileNameMethod.Data = new FunctionPointer<ToFixedStringFileNameDelegate>(Marshal.GetFunctionPointerForDelegate(s_ToFixedStringFileNameDelegate));
+            Burst2ManagedCall<ToUnsafeTextTimestampDelegate, TimeStampWrapper>.Init(ToUnsafeTextTimeUTC);
+            Burst2ManagedCall<ToFixedStringFileNameDelegate, TimeStampWrapper>.Init(ToFixedStringFileName);
         }
 
 
-        [AOT.MonoPInvokeCallback(typeof(ToUnsafeTextTimestampDelegateKey))]
+        [AOT.MonoPInvokeCallback(typeof(ToUnsafeTextTimestampDelegate))]
         private static int ToUnsafeTextTimeUTC(long timestampUTCNanoseconds, ref UnsafeText result)
         {
             var dateTime = new DateTime(NanosecToDateTimeTicks(timestampUTCNanoseconds));
@@ -181,7 +171,7 @@ namespace Unity.Logging.Internal
         {
             if (s_GetTimestampHandler.Data.IsCreated)
             {
-#if UNITY_2021_2_OR_NEWER // C# 9 support, unmanaged delegates - gc alloc free way to call FunctionPointer
+#if LOGGING_USE_UNMANAGED_DELEGATES
                 unsafe
                 {
                     return ((delegate * unmanaged[Cdecl] <long>)s_GetTimestampHandler.Data.Value)();
@@ -189,7 +179,6 @@ namespace Unity.Logging.Internal
 #else
                 return s_GetTimestampHandler.Data.Invoke();
 #endif
-
             }
 
             return TimeStampManager.GetTimeStamp();
@@ -203,7 +192,16 @@ namespace Unity.Logging.Internal
         /// <returns>Length written to the buffer</returns>
         public static int GetFormattedTimeStampString(long timestamp, ref UnsafeText messageOutput)
         {
-            return s_ToUnsafeTextMethod.Data.Invoke(timestamp, ref messageOutput);
+            var ptr = Burst2ManagedCall<ToUnsafeTextTimestampDelegate, TimeStampWrapper>.Ptr();
+
+#if LOGGING_USE_UNMANAGED_DELEGATES
+            unsafe
+            {
+                return ((delegate * unmanaged[Cdecl] <long, ref UnsafeText, int>)ptr.Value)(timestamp, ref messageOutput);
+            }
+#else
+            return ptr.Invoke(timestamp, ref messageOutput);
+#endif
         }
 
         /// <summary>
@@ -214,7 +212,17 @@ namespace Unity.Logging.Internal
         public static FixedString64Bytes GetFormattedTimeStampStringForFileName(long timestamp)
         {
             FixedString64Bytes res = "";
-            s_ToFixedStringFileNameMethod.Data.Invoke(timestamp, ref res);
+
+            var ptr = Burst2ManagedCall<ToFixedStringFileNameDelegate, TimeStampWrapper>.Ptr();
+
+#if LOGGING_USE_UNMANAGED_DELEGATES
+            unsafe
+            {
+                ((delegate * unmanaged[Cdecl] <long, ref FixedString64Bytes, void>)ptr.Value)(timestamp, ref res);
+            }
+#else
+            ptr.Invoke(timestamp, ref res);
+#endif
             return res;
         }
     }

@@ -39,11 +39,16 @@ namespace Unity.Logging
     public class LoggerConfig
     {
         private FixedString512Bytes m_CurrentTemplate = "{Timestamp} | {Level} | {Message}";
-
+        private bool m_CurrentCaptureStacktrace = false;
         /// <summary>
         /// Set minimal <see cref="LogLevel"/> that will be processed by the <see cref="Logger"/>
         /// </summary>
         public readonly LoggerMinimumLevelConfig MinimumLevel;
+
+        /// <summary>
+        /// Set the <see cref="Unity.Logging.SyncMode"/> that will be used by the <see cref="Logger"/>
+        /// </summary>
+        public readonly LoggerSyncModeConfig SyncMode;
 
         internal LogMemoryManagerParameters MemoryManagerParameters;
         internal readonly List<SinkConfiguration> SinkConfigs;
@@ -56,6 +61,7 @@ namespace Unity.Logging
             LogMemoryManagerParameters.GetDefaultParameters(out MemoryManagerParameters);
             MinimumLevel = new LoggerMinimumLevelConfig(this);
             SinkConfigs = new List<SinkConfiguration>(32);
+            SyncMode = new LoggerSyncModeConfig(this);
         }
 
         /// <summary>
@@ -79,6 +85,23 @@ namespace Unity.Logging
         /// </summary>
         /// <returns>Current template that is used</returns>
         public FixedString512Bytes GetOutputTemplate() => m_CurrentTemplate;
+
+        /// <summary>
+        /// Should this logger capture stacktraces
+        /// </summary>
+        /// <param name="capture">True if it should capture stacktraces</param>
+        /// <returns>Config to continue methods chain</returns>
+        public LoggerConfig CaptureStacktrace(bool capture = true)
+        {
+            m_CurrentCaptureStacktrace = capture;
+            return this;
+        }
+
+        /// <summary>
+        /// Returns current capture stacktrace state.
+        /// </summary>
+        /// <returns>True is current state is to capture stacktraces</returns>
+        public bool GetCaptureStacktrace() => m_CurrentCaptureStacktrace;
 
         /// <summary>
         /// Call that creates <see cref="Logger"/>

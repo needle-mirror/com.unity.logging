@@ -1,8 +1,13 @@
+#if UNITY_DOTSRUNTIME || UNITY_2021_2_OR_NEWER
+#define LOGGING_USE_UNMANAGED_DELEGATES // C# 9 support, unmanaged delegates - gc alloc free way to call
+#endif
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 using AOT;
 using Unity.Burst;
 using Unity.Collections;
@@ -13,252 +18,267 @@ using Unity.Logging.Internal.Debug;
 using Unity.Logging.Sinks;
 using UnityEngine.Assertions;
 
-[assembly: RegisterGenericJobType(typeof(SinkJob<StringSinkLogger>))]
-
 namespace Unity.Logging.Sinks
 {
-    public struct StringSinkLogger : ILogger
+    public static class StringLoggerSinkExt
     {
-        internal int id;
-
-        public void OnLogMessage(in LogMessage logEvent, in FixedString512Bytes outTemplate, ref LogMemoryManager memoryManager)
+        public static LoggerConfig StringLogger(this LoggerWriterConfig writeTo,
+                                                FormatterStruct formatter = default,
+                                                bool? captureStackTrace = null,
+                                                LogLevel? minLevel = null,
+                                                FixedString512Bytes? outputTemplate = null)
         {
-            var message = default(UnsafeText);
-            var errorMessage = default(FixedString512Bytes);
+            if (formatter.IsCreated == false)
+                formatter = LogFormatterText.Formatter;
 
-            if (TextLoggerParser.ParseMessage(outTemplate, logEvent, ref message, ref errorMessage, ref memoryManager))
-            {
-                if (message.IsCreated)
-                {
-                    try
-                    {
-                        unsafe
-                        {
-                            var data = message.GetUnsafePtr();
-                            var length = message.Length;
-                            var newLine = true;
-                            ManagedMemoryLogHandler.Write(id, data, length, newLine);
-                        }
-                    }
-                    finally
-                    {
-                        message.Dispose();
-                    }
-                }
-                else
-                {
-                    throw new Exception(); // this is a test sink
-                }
-            }
-            else
-            {
-                SelfLog.OnFailedToParseMessage();
-
-                throw new Exception(errorMessage.ToString()); // this is a test sink
-            }
+            return writeTo.AddSinkConfig(new StringSink.Configuration(writeTo, formatter, captureStackTrace, minLevel, outputTemplate));
         }
     }
 
-    public class StringSink : SinkSystemBase<StringSinkLogger>
+    [BurstCompile]
+    public class StringSink : SinkSystemBase
     {
-        int id;
-
-        public override void Initialize(in Logger logger, in SinkConfiguration systemConfig)
+        public class Configuration : SinkConfiguration
         {
-            id = ManagedMemoryLogHandler.Create();
+            public override SinkSystemBase CreateSinkInstance(Logger logger) => CreateAndInitializeSinkInstance<StringSink>(logger, this);
+
+            public Configuration(LoggerWriterConfig writeTo, FormatterStruct formatter,
+                                 bool? captureStackTraceOverride = null, LogLevel? minLevelOverride = null, FixedString512Bytes? outputTemplateOverride = null)
+                : base(writeTo, formatter, captureStackTraceOverride, minLevelOverride, outputTemplateOverride)
+            {}
+        }
+
+        private int m_StringBuilderId;
+
+        public override LogController.SinkStruct ToSinkStruct()
+        {
+            var s = base.ToSinkStruct();
+            s.OnLogMessageEmit = new OnLogMessageEmitDelegate(OnLogMessageEmitFunc);
+            s.UserData = new IntPtr(m_StringBuilderId);
+            return s;
+        }
+
+        [BurstCompile]
+        [AOT.MonoPInvokeCallback(typeof(OnLogMessageEmitDelegate.Delegate))]
+        internal static void OnLogMessageEmitFunc(in LogMessage logEvent, ref FixedString512Bytes outTemplate, ref UnsafeText messageBuffer, IntPtr memoryManager, IntPtr userData, Allocator allocator)
+        {
+            unsafe
+            {
+                try
+                {
+                    var data = messageBuffer.GetUnsafePtr();
+                    var newLine = true;
+
+                    var id = userData.ToInt32();
+
+                    UnManagedMemoryLogHandler.Write(id, data, messageBuffer.Length, newLine);
+                }
+                finally
+                {
+                    messageBuffer.Length = 0;
+                }
+            }
+        }
+
+        public override void Initialize(Logger logger, SinkConfiguration systemConfig)
+        {
+            m_StringBuilderId = UnManagedMemoryLogHandler.Create();
             base.Initialize(logger, systemConfig);
-            LoggerImpl.id = id;
         }
 
         public override void Dispose()
         {
-            ManagedMemoryLogHandler.Dispose(id);
+            UnManagedMemoryLogHandler.Dispose(m_StringBuilderId);
             base.Dispose();
         }
 
         public string GetString()
         {
-            return ManagedMemoryLogHandler.FlushOutput(id);
+            return UnManagedMemoryLogHandler.FlushOutput(m_StringBuilderId);
         }
 
         internal void WriteText(string contents)
         {
-            ManagedMemoryLogHandler.WriteText(id, contents);
+            UnManagedMemoryLogHandler.WriteText(m_StringBuilderId, contents);
         }
 
         public static void AssertNoSinks()
         {
-            ManagedMemoryLogHandler.AssertNoSinks();
+            UnManagedMemoryLogHandler.AssertNoSinks();
         }
     }
 
-
-    public static class StringLoggerSinkExt
+    internal static class UnManagedMemoryLogHandler
     {
-        public static LoggerConfig StringLogger(this LoggerWriterConfig writeTo,
-                                                bool captureStackTrace = false,
-                                                LogLevel? minLevel = null,
-                                                FixedString512Bytes? outputTemplate = null)
-        {
-            return writeTo.AddSinkConfig(new SinkConfiguration<StringSink>
-            {
-                CaptureStackTraces = captureStackTrace,
-                MinLevelOverride = minLevel,
-                OutputTemplateOverride = outputTemplate,
-            });
-        }
-    }
-
-    class StringBuilderReplacement : IDisposable
-    {
-        private unsafe byte* ptr;
-        private int size;
-        private int cap;
-
-        public StringBuilderReplacement(int n)
-        {
-            unsafe
-            {
-                cap = n;
-                ptr = (byte*)UnsafeUtility.Malloc(n, 0, Allocator.Persistent);
-                size = 0;
-            }
-        }
-
-        public void Dispose()
-        {
-            unsafe
-            {
-                UnsafeUtility.Free(ptr, Allocator.Persistent);
-                ptr = null;
-            }
-        }
-
-        public unsafe void AppendUTF8(byte* data, int length)
-        {
-            var prevCap = cap;
-
-            ReallocIfNeeded(size + length);
-
-            Assert.IsTrue(size + length < cap, $"{size} + {length} < {cap} . oldCap = {prevCap}");
-            UnsafeUtility.MemCpy(ptr + size, data, length);
-            size += length;
-        }
-
-        public void AppendNewLine()
-        {
-            unsafe
-            {
-                ReallocIfNeeded(size + 2);
-#if UNITY_WINDOWS || UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
-                ptr[size++] = 0xD;
-#endif
-                ptr[size++] = 0xA;
-            }
-        }
-
-        private void ReallocIfNeeded(int requiredSize)
-        {
-            unsafe
-            {
-                if (cap > requiredSize) return;
-
-                while (cap <= requiredSize)
-                    cap *= 2;
-
-                var newPtr = (byte*)UnsafeUtility.Malloc(cap, 0, Allocator.Persistent);
-                Assert.IsTrue(cap >= size);
-                Assert.IsTrue(cap > requiredSize);
-                UnsafeUtility.MemCpy(newPtr, ptr, size);
-                UnsafeUtility.Free(ptr, Allocator.Persistent);
-                ptr = newPtr;
-            }
-        }
-
-        public void Clear()
-        {
-            size = 0;
-        }
-
-        public override string ToString()
-        {
-            unsafe
-            {
-                if (size == 0)
-                    return "";
-                return Encoding.UTF8.GetString(ptr, size);
-            }
-        }
-    }
-
-    internal static class ManagedMemoryLogHandler
-    {
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal unsafe delegate void WriteDelegate(int id, byte* data, int length, bool newLine);
-
-        // make sure delegates are not collected by GC
-        private static WriteDelegate s_WriteDelegate;
-
-        private struct ManagedFileOperationsKey {}
-        internal static readonly SharedStatic<FunctionPointer<WriteDelegate>> s_WriteMethod = SharedStatic<FunctionPointer<WriteDelegate>>.GetOrCreate<FunctionPointer<WriteDelegate>, ManagedFileOperationsKey>(16);
-
-        private static Dictionary<int, StringBuilderReplacement> sb;
         private static bool IsInitialized;
+
+        // TODO: change to UnsafeHashMap when collections bug is fixed
+
+        struct UniqIdKey{}
+        static readonly SharedStatic<int> sbUniq = SharedStatic<int>.GetOrCreate<int, UniqIdKey>(16);
+        static readonly SharedStatic<UnsafeParallelHashMap<int, ParallelText>> sb = SharedStatic<UnsafeParallelHashMap<int, ParallelText>>.GetOrCreate<UnsafeParallelHashMap<int, ParallelText>>(16);
+
+        struct SbLockKey{}
+        static readonly SharedStatic<long> sbLock = SharedStatic<long>.GetOrCreate<long, SbLockKey>(16);
+        struct SbReaderKey{}
+        static readonly SharedStatic<long> sbReader = SharedStatic<long>.GetOrCreate<long, SbReaderKey>(16);
+
+
+        struct ParallelText : IDisposable
+        {
+            private SpinLockExclusive m_Lock;
+            private UnsafeText m_Text;
+
+            public ParallelText(int capacity, Allocator allocator)
+            {
+                m_Lock = new SpinLockExclusive(allocator);
+                m_Text = new UnsafeText(capacity, allocator);
+            }
+
+            private int ExactLengthOfUtf16(ref UnsafeText text)
+            {
+                unsafe
+                {
+                    var utf8Buffer = text.GetUnsafePtr();
+                    var utf8Length = text.Length;
+                    var utf16Length = 0;
+                    for (var utf8Offset = 0; utf8Offset < utf8Length;)
+                    {
+                        Unity.Collections.Unicode.Utf8ToUcs(out var ucs, utf8Buffer, ref utf8Offset, utf8Length);
+
+                        int tempUtf16Symbol;
+                        int utf16SymbolSize = 0;
+                        char* ptr = (char*)&tempUtf16Symbol;
+
+                        Unity.Collections.Unicode.UcsToUtf16(ptr, ref utf16SymbolSize, 2, ucs);
+                        utf16Length += utf16SymbolSize;
+                    }
+
+                    return utf16Length;
+                }
+            }
+
+            public string ToStringAndClear()
+            {
+                using (var l = new SpinLockExclusive.ScopedLock(m_Lock))
+                {
+                    string res = "";
+
+#if !UNITY_DOTSRUNTIME
+                    var utf16Size = ExactLengthOfUtf16(ref m_Text);
+                    res = string.Create(utf16Size, m_Text, (chars, text) =>
+                    {
+                        unsafe
+                        {
+                            fixed (char* c = chars) {
+                                Unicode.Utf8ToUtf16(text.GetUnsafePtr(), text.Length, c, out var length, chars.Length);
+                            }
+                        }
+                    });
+#else
+                    // remove this block when dots runtime moves to .net 6 / 2.1 standard
+                    try
+                    {
+
+                        unsafe
+                        {
+                            static string ConvertToUtf16String<T>(char* dst, ref T fs, int utf16Capacity) where T : IUTF8Bytes, INativeList<byte>
+                            {
+                                Unicode.Utf8ToUtf16(fs.GetUnsafePtr(), fs.Length, dst, out var length, utf16Capacity);
+
+                                return new string(dst, 0, length);
+                            }
+
+                            var utf16WorstSize = m_Text.Length * 2;
+                            var shouldStackalloc = utf16WorstSize <= 4096;
+
+                            if (shouldStackalloc)
+                            {
+                                var c = stackalloc char[utf16WorstSize];
+                                res = ConvertToUtf16String(c, ref m_Text, utf16WorstSize);
+                            }
+                            else
+                            {
+                                var arr = new char[utf16WorstSize];
+                                fixed (char* c = arr)
+                                {
+                                    res = ConvertToUtf16String(c, ref m_Text, utf16WorstSize);
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        UnityEngine.Debug.LogException(e);
+                    }
+#endif
+                    m_Text.Clear();
+                    return res;
+                }
+            }
+
+            public unsafe void Append(byte* data, int length, bool newLine)
+            {
+                using (var l = new SpinLockExclusive.ScopedLock(m_Lock))
+                {
+                    m_Text.Append(data, length);
+                    if (newLine)
+                    {
+                        ref var newLineChar = ref Builder.EnvNewLine.Data;
+                        m_Text.Append(newLineChar);
+                    }
+                }
+            }
+
+            public void Dispose()
+            {
+                m_Lock.Dispose();
+                m_Text.Dispose();
+            }
+        }
 
         internal static void Initialize()
         {
             if (IsInitialized) return;
             IsInitialized = true;
 
-            sb = new Dictionary<int, StringBuilderReplacement>();
-
-            unsafe
-            {
-                s_WriteDelegate = WriteFunc;
-                s_WriteMethod.Data = new FunctionPointer<WriteDelegate>(Marshal.GetFunctionPointerForDelegate(s_WriteDelegate));
-            }
+            sbLock.Data = 0;
+            sbReader.Data = 0;
+            sbUniq.Data = 0;
+            sb.Data = new UnsafeParallelHashMap<int, ParallelText>(64, Allocator.Persistent);
         }
 
-        [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS")]
+        [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS"), Conditional("UNITY_DOTS_DEBUG")] // ENABLE_UNITY_COLLECTIONS_CHECKS or UNITY_DOTS_DEBUG
         private static void CheckIsValid(int id)
         {
             if (id <= 0)
                 throw new InvalidOperationException("To call this operation id must be valid");
         }
 
-        [AOT.MonoPInvokeCallback(typeof(WriteDelegate))]
-        private static unsafe void WriteFunc(int id, byte* data, int length, bool newLine)
-        {
-            CheckIsValid(id);
-
-            lock (sb)
-            {
-                if (sb.ContainsKey(id))
-                {
-                    sb[id].AppendUTF8(data, length);
-                    if (newLine)
-                        sb[id].AppendNewLine();
-                }
-                else
-                    throw new Exception(id + " was not found in WriteFunc");
-            }
-        }
-
-        // not burst
         public static int Create()
         {
-            if (s_WriteMethod.Data.IsCreated == false)
-                Initialize();
+            Initialize();
 
-            lock (sb)
+            try
             {
-                for (var i = sb.Count + 1; i < sb.Count + 999; ++i)
-                    if (sb.ContainsKey(i) == false)
-                    {
-                        sb[i] = new StringBuilderReplacement(4096);
-                        return i;
-                    }
+                BurstSpinLockReadWriteFunctions.EnterExclusive(ref sbLock.Data, ref sbReader.Data);
+                for (var guard = 0; guard < 999; guard++)
+                {
+                    var id = ++sbUniq.Data;
+
+                    if (sb.Data.ContainsKey(id))
+                        continue;
+
+                    sb.Data[id] = new ParallelText(4096, Allocator.Persistent);
+
+                    return id;
+                }
             }
+            finally
+            {
+                BurstSpinLockReadWriteFunctions.ExitExclusive(ref sbLock.Data);
+            }
+
             return 0;
         }
 
@@ -266,41 +286,59 @@ namespace Unity.Logging.Sinks
         public static string FlushOutput(int id)
         {
             CheckIsValid(id);
-            lock (sb)
+
+            try
             {
-                if (sb.ContainsKey(id))
+                BurstSpinLockReadWriteFunctions.EnterRead(ref sbLock.Data, ref sbReader.Data);
+                if (sb.Data.TryGetValue(id, out var unsafeText))
                 {
-                    var res = sb[id].ToString();
-                    sb[id].Clear();
+                    var res = unsafeText.ToStringAndClear();
+                    sb.Data[id] = unsafeText;
                     return res;
                 }
-                else
-                {
-                    throw new Exception(id + " is not found! FlushOutput");
-                }
             }
+            finally
+            {
+                BurstSpinLockReadWriteFunctions.ExitRead(ref sbReader.Data);
+            }
+
+
+            throw new Exception(id + " is not found! FlushOutput");
         }
 
         // called from burst or not burst
         public static unsafe void Write(int id, byte* data, int length, bool newLine)
         {
             CheckIsValid(id);
-            s_WriteMethod.Data.Invoke(id, data, length, newLine);
+
+            try
+            {
+                BurstSpinLockReadWriteFunctions.EnterRead(ref sbLock.Data, ref sbReader.Data);
+                if (sb.Data.TryGetValue(id, out var unsafeText))
+                {
+                    unsafeText.Append(data, length, newLine);
+
+                    sb.Data[id] = unsafeText;
+                    return;
+                }
+            }
+            finally
+            {
+                BurstSpinLockReadWriteFunctions.ExitRead(ref sbReader.Data);
+            }
+
+            SelfLog.Error(FixedString.Format("{0} was not found in WriteFunc", id));
         }
 
         public static void WriteText(int id, string contents)
         {
-            CheckIsValid(id);
-
             var bytes= Encoding.UTF8.GetBytes(contents);
-            lock (sb)
+
+            unsafe
             {
-                unsafe
+                fixed (byte* p = &bytes[0])
                 {
-                    fixed (byte* p = &bytes[0])
-                    {
-                        sb[id].AppendUTF8(p, bytes.Length);
-                    }
+                    Write(id, p, bytes.Length, false);
                 }
             }
         }
@@ -308,28 +346,42 @@ namespace Unity.Logging.Sinks
         public static void Dispose(int id)
         {
             CheckIsValid(id);
-            lock (sb)
+
+            try
             {
-                sb[id].Dispose();
-                sb.Remove(id);
+                BurstSpinLockReadWriteFunctions.EnterExclusive(ref sbLock.Data, ref sbReader.Data);
+                if (sb.Data.TryGetValue(id, out var unsafeText))
+                {
+                    unsafeText.Dispose();
+                    sb.Data.Remove(id);
+                }
+            }
+            finally
+            {
+                BurstSpinLockReadWriteFunctions.ExitExclusive(ref sbLock.Data);
             }
         }
 
         public static void AssertNoSinks()
         {
-            if (sb != null)
+            if (sb.Data.IsCreated)
             {
-                lock (sb)
+                try
                 {
+                    BurstSpinLockReadWriteFunctions.EnterRead(ref sbLock.Data, ref sbReader.Data);
+
                     var s = "";
-                    foreach (var p in sb)
+                    foreach (var ids in sb.Data.GetKeyArray(Allocator.Temp))
                     {
-                        s += p.Key + " ";
+                        s += ids + " ";
                     }
-                    Assert.AreEqual(0, sb.Count, s);
+                    Assert.AreEqual(0, sb.Data.Count(), s);
+                }
+                finally
+                {
+                    BurstSpinLockReadWriteFunctions.ExitRead(ref sbReader.Data);
                 }
             }
         }
     }
-
 }

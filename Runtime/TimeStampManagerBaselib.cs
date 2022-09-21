@@ -7,6 +7,7 @@ using Unity.Burst;
 
 namespace Unity.Logging.Internal
 {
+    [HideInStackTrace]
     public static class TimeStampManagerBaselib
     {
         private static byte s_Initialized;

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using UnityEngine.Assertions;
 using Unity.Burst;
@@ -22,7 +24,7 @@ namespace Unity.Logging
         /// </summary>
         public readonly LoggerConfig Config;
 
-        private readonly List<ISinkSystemInterface> m_Sinks;
+        private readonly List<SinkSystemBase> m_Sinks;
         private bool m_HasNoSinks;
         private LogLevel m_MinimalLogLevelAcrossAllSinks = LogLevel.Fatal;
 
@@ -35,6 +37,11 @@ namespace Unity.Logging
         /// Minimal <see cref="LogLevel"/> that this <see cref="Logger"/> will process (means it has sinks for it)
         /// </summary>
         public LogLevel MinimalLogLevelAcrossAllSystems => m_MinimalLogLevelAcrossAllSinks;
+
+        static Logger()
+        {
+            LoggerManager.Initialize();
+        }
 
         /// <summary>
         /// Constructor
@@ -50,10 +57,23 @@ namespace Unity.Logging
 
             Handle.MustBeValid();
 
-            m_Sinks = new List<ISinkSystemInterface>(config.SinkConfigs.Count);
-            foreach (var sc in config.SinkConfigs)
+            m_Sinks = new List<SinkSystemBase>(config.SinkConfigs.Count);
+
+            LogControllerScopedLock @lock = default;
+            try
             {
-                AddSink(sc);
+                @lock = LogControllerScopedLock.Create(Handle);
+
+                foreach (var sc in config.SinkConfigs)
+                {
+                    AddSink(sc, ref @lock);
+                }
+
+                @lock.GetLogController().SyncMode = config.SyncMode.Get;
+            }
+            finally
+            {
+                @lock.Dispose();
             }
 
             UpdateMinimalLogLevelAcrossAllSinks();
@@ -70,23 +90,64 @@ namespace Unity.Logging
         /// </summary>
         /// <param name="sc">Configuration to create a sink</param>
         /// <returns>Newly created sink</returns>
-        public ISinkSystemInterface AddSink(SinkConfiguration sc)
+        public SinkSystemBase AddSink(SinkConfiguration sc)
+        {
+            var defaultLock = default(LogControllerScopedLock);
+            return AddSink(sc, ref defaultLock);
+        }
+
+        /// <summary>
+        /// Creates new sink using <see cref="SinkConfiguration"/>
+        /// </summary>
+        /// <param name="sc">Configuration to create a sink</param>
+        /// <param name="logLock">Lock that holds this logger's LogController</param>
+        /// <returns>Newly created sink</returns>
+        public SinkSystemBase AddSink(SinkConfiguration sc, ref LogControllerScopedLock logLock)
         {
             Handle.MustBeValid();
             ThreadGuard.EnsureRunningOnMainThread();
+            ThrowIfThisIsWrongLock(ref logLock);
 
             var sink = sc.CreateSinkInstance(this);
             m_Sinks.Add(sink);
 
+            if (logLock.IsValid)
+            {
+                ref var lc = ref logLock.GetLogController();
+                lc.AddSinkStruct(sink);
+            }
+            else
+            {
+                LogControllerScopedLock @lock = default;
+                try
+                {
+                    @lock = LogControllerScopedLock.Create(Handle);
+
+                    ref var lc = ref @lock.GetLogController();
+                    lc.AddSinkStruct(sink);
+                }
+                finally
+                {
+                    @lock.Dispose();
+                }
+            }
+
             return sink;
+        }
+
+        [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS"), Conditional("UNITY_DOTS_DEBUG")]
+        private void ThrowIfThisIsWrongLock(ref LogControllerScopedLock logLock)
+        {
+            if (logLock.Handle.IsValid && logLock.Handle.Value != Handle.Value)
+                throw new Exception("LogControllerScopedLock is valid, but from the wrong Logger");
         }
 
         /// <summary>
         /// Returns the sink of type T. Will return first one if there are several ones of the type T
         /// </summary>
-        /// <typeparam name="T">ISinkSystemInterface sink type</typeparam>
+        /// <typeparam name="T">SinkSystemBase type</typeparam>
         /// <returns>Existing sink of type T or default</returns>
-        public T GetSink<T>() where T : ISinkSystemInterface, new()
+        public T GetSink<T>() where T : SinkSystemBase
         {
             Handle.MustBeValid();
             ThreadGuard.EnsureRunningOnMainThread();
@@ -107,9 +168,8 @@ namespace Unity.Logging
         /// Get or create sink of type T
         /// </summary>
         /// <param name="sc">Configuration of the sink</param>
-        /// <typeparam name="T">ISinkSystemInterface</typeparam>
         /// <returns>Existing or created sink</returns>
-        public T GetOrCreateSink<T>(SinkConfiguration<T> sc) where T : ISinkSystemInterface, new()
+        public T GetOrCreateSink<T>(SinkConfiguration sc) where T : SinkSystemBase
         {
             Handle.MustBeValid();
             ThreadGuard.EnsureRunningOnMainThread();
@@ -187,7 +247,7 @@ namespace Unity.Logging
         /// </summary>
         /// <param name="i">index of the sink</param>
         /// <returns>Returns sink number i</returns>
-        public ISinkSystemInterface GetSink(int i) => m_Sinks[i];
+        public SinkSystemBase GetSink(int i) => m_Sinks[i];
 
         /// <summary>
         /// Any in-flight Update will be tracked in here
@@ -203,6 +263,7 @@ namespace Unity.Logging
             Handle.MustBeValid();
 
             m_CurrentUpdateJobHandle.Complete();
+            Logging.Internal.LoggerManager.FlushAll();
 
             LoggerManager.OnDispose(this);
 
@@ -235,34 +296,26 @@ namespace Unity.Logging
         }
 
         /// <summary>
-        /// Schedules Update job for this Logger. It will sort all messages by timestamp, then call all Sinks in parallel.
-        /// After all sinks are done: Cleanup job that will clean and flip <see cref="DispatchQueue"/> will be called.
-        /// And then <see cref="LogMemoryManager"/>'s Update job will be executed.
+        /// Does Sync update if SyncMode is set to FullSync.
+        /// Also creates a lock struct that contains LogController that can be used afterwards in async update logic
         /// </summary>
-        /// <param name="dependency">Any dependency that should be executed before this Update</param>
-        /// <returns>JobHandle for the Update job</returns>
-        public JobHandle ScheduleUpdate(JobHandle dependency)
+        /// <param name="lock">LogController lock that will be created. Doesn't own the lock</param>
+        /// <param name="loggerHandle">Logger handle to update</param>
+        /// <returns>Returns true if need to update async. False if everything was done already</returns>
+        [BurstCompile]
+        private static bool UpdateFullSync(out LogControllerScopedLock @lock, LoggerHandle loggerHandle)
         {
-            ThreadGuard.AssertRunningOnMainThread();
-            Handle.MustBeValid();
+            @lock = LogControllerScopedLock.CreateAlreadyUnderLock(loggerHandle);
+            ref var lc = ref @lock.GetLogController();
 
-            var @lock = LogControllerScopedLock.Create(Handle);
+            if (lc.SyncMode == SyncMode.FullSync)
+            {
+                lc.MemoryManager.Update();
 
-            dependency = JobHandle.CombineDependencies(m_CurrentUpdateJobHandle, dependency);
+                return false;
+            }
 
-            // external dependency -> sort -> all sinks in parallel -> cleanup -> logManagerUpdate
-            //                             -> all sinks in parallel ->
-
-            var sortJobHandle = new SortTimestampsJob { Lock = @lock }.Schedule(dependency);
-
-            var chain = sortJobHandle;
-            // run sinks in parallel after 'dependency' is done.
-            foreach (var sink in m_Sinks)
-                chain = JobHandle.CombineDependencies(chain, sink.ScheduleUpdate(@lock, sortJobHandle));
-
-            m_CurrentUpdateJobHandle = new CleanupUpdateDisposeLockJob { LockToDispose = @lock }.Schedule(chain);
-
-            return m_CurrentUpdateJobHandle;
+            return true;
         }
 
         internal JobHandle ScheduleUpdateWithoutLock(JobHandle dependency)
@@ -273,21 +326,40 @@ namespace Unity.Logging
 
             dependency = JobHandle.CombineDependencies(m_CurrentUpdateJobHandle, dependency);
 
-            var @lock = LogControllerScopedLock.CreateAlreadyUnderLock(Handle);
+            var needToUpdateAsync = UpdateFullSync(out var @lock, Handle);
 
-            // external dependency -> sort -> all sinks in parallel -> cleanup -> logManagerUpdate
-            //                             -> all sinks in parallel ->
+            if (needToUpdateAsync)
+            {
+                // external dependency -> sort -> all sinks in parallel -> cleanup -> logManagerUpdate
+                //                             -> all sinks in parallel ->
 
-            var sortJobHandle = new SortTimestampsJob { Lock = @lock }.Schedule(dependency);
+                // Note: In case of FatalIsSync  FlushSync can be called in between sinks.
+                // Example:
+                // This update is scheduled, Sort is done, Sink A ran
+                //      -- FlushSync happens from Log.Fatal --
+                //         Sink A should be skipped for the 'read' queue in the DispatchQueue
+                //           - This is done via LastTimestamp in SinkStruct
+                //         Sink A should handle 'write' queue in the DispatchQueue
+                //         Sink B should run on both, since it didn't run during update
+                //         Cleanup, clear of all dispatch queue
+                //      -- FlushSync is done
+                // Sink B, Cleanup are running on the empty queue, doing nothing
+                // log manager update
 
-            var chain = sortJobHandle;
-            // run sinks in parallel after 'dependency' is done.
-            foreach (var sink in m_Sinks)
-                chain = JobHandle.CombineDependencies(chain, sink.ScheduleUpdate(@lock, sortJobHandle));
+                var sortJobHandle = new SortTimestampsJob { Lock = @lock }.Schedule(dependency);
 
-            m_CurrentUpdateJobHandle = new CleanupUpdateDisposeLockJob { LockToDispose = @lock }.Schedule(chain);
+                var chain = sortJobHandle;
+                // run sinks in parallel after 'dependency' is done.
+                foreach (var sink in m_Sinks)
+                    chain = JobHandle.CombineDependencies(chain, sink.ScheduleUpdate(@lock, sortJobHandle));
 
-            return m_CurrentUpdateJobHandle;
+                m_CurrentUpdateJobHandle = new CleanupUpdateJob { Lock = @lock }.Schedule(chain);
+                return m_CurrentUpdateJobHandle;
+            }
+
+            // sync update, so dependency should be completed here
+            dependency.Complete();
+            return default;
         }
 
         [BurstCompile]
@@ -303,19 +375,18 @@ namespace Unity.Logging
         }
 
         [BurstCompile]
-        private struct CleanupUpdateDisposeLockJob : IJob
+        internal struct CleanupUpdateJob : IJob
         {
-            public LogControllerScopedLock LockToDispose;
+            public LogControllerScopedLock Lock;
 
             public void Execute()
             {
+                ref var logController = ref Lock.GetLogController();
                 try
                 {
-                    ref var logController = ref LockToDispose.GetLogController();
-
                     try
                     {
-                        var reader = logController.DispatchQueue.BeginRead();
+                        var reader = logController.DispatchQueue.BeginReadExclusive();
 
                         var n = reader.Length;
 
@@ -325,31 +396,36 @@ namespace Unity.Logging
                             {
                                 var elem = UnsafeUtility.ReadArrayElement<LogMessage>(reader.Ptr, position);
 
-                                //
-                                // TODO: Add check to see if we need to force release of a Payload buffer to safeguard against
-                                // poorly behaving Systems, i.e. a Sink fails to release a lock, don't want to "leak" buffers.
-                                //
-                                bool shouldForce = false;
-
-                                // Attempt to release the buffer, and if it's not Locked, then delete the Entity referencing it
-                                // NOTE: Buffer may have been manually released by some other system and need to still remove the data
-                                logController.MemoryManager.ReleasePayloadBuffer(elem.Payload, out var result, shouldForce);
-
-                                ManagedStackTraceWrapper.Free(elem.StackTraceId);
+                                ReleaseLogMessage(ref logController.MemoryManager, ref elem);
                             }
                         }
                     }
                     finally
                     {
-                        logController.DispatchQueue.EndReadClearAndFlip();
+                        logController.DispatchQueue.EndReadExclusiveClearAndFlip();
                     }
-
-                    logController.MemoryManager.Update();
                 }
                 finally
                 {
-                    LockToDispose.Dispose();
+                    logController.MemoryManager.Update();
                 }
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            internal static void ReleaseLogMessage(ref LogMemoryManager memoryManager, ref LogMessage elem)
+            {
+                //
+                // TODO: Add check to see if we need to force release of a Payload buffer to safeguard against
+                // poorly behaving Systems, i.e. a Sink fails to release a lock, don't want to "leak" buffers.
+                //
+                var shouldForce = false;
+
+                // Attempt to release the buffer, and if it's not Locked, then delete the Entity referencing it
+                // NOTE: Buffer may have been manually released by some other system and need to still remove the data
+                var success = memoryManager.ReleasePayloadBuffer(elem.Payload, out _, shouldForce);
+                Assert.IsTrue(success);
+
+                ManagedStackTraceWrapper.Free(elem.StackTraceId);
             }
         }
 

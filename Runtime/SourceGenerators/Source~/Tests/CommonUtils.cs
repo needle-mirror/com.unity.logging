@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
@@ -17,10 +18,37 @@ namespace Tests
         static CommonUtils()
         {
             Header = $@"
+using System;
+using System.Text;
 using FAKEUSING = UnityEngine;
+
+public enum Allocator
+{{
+    Invalid = 0,
+    None = 1,
+    Temp = 2,
+    TempJob = 3,
+    Persistent = 4,
+    AudioKernel = 5,
+    FirstUserIndex = 64, // 0x00000040
+}}
 
 namespace Unity.Logging
 {{
+    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+    public class NotLogged : Attribute {{}}
+
+    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+    public class LogWithName : Attribute
+    {{
+        public string ReplacedName;
+
+        public LogWithName(string newName)
+        {{
+            ReplacedName = newName;
+        }}
+    }}
+
     public struct LoggerHandle
     {{
         public long Value;
@@ -34,6 +62,19 @@ namespace Unity.Logging
     }}
 }}
 
+struct NativeText
+{{
+    public NativeText(int capacity, Allocator allocator)
+    {{
+    }}
+}}
+
+struct UnsafeText
+{{
+    public UnsafeText(int capacity, Allocator allocator)
+    {{
+    }}
+}}
 ";
 
             static string GenerateImplicitCastsFixedString(int indx)
@@ -82,39 +123,37 @@ namespace Unity.Logging
         }
 
         private static Compilation CreateCompilation(string source) =>
-            CSharpCompilation.Create("compilation",
+            CSharpCompilation.Create("SourceGeneratorTestsCompilation",
                 new[] {CSharpSyntaxTree.ParseText(source)},
                 new[] {MetadataReference.CreateFromFile(typeof(Binder).GetTypeInfo().Assembly.Location)},
                 new CSharpCompilationOptions(OutputKind.ConsoleApplication));
 
-        public static LoggingGenerator GenerateCodeWithPrefix(string userHeader, string testData)
+        public static LoggingSourceGenerator GenerateCodeWithPrefix(string userHeader, string testData)
         {
             return GenerateCodeInternal(userHeader + Header + testData, out _);
         }
 
-        public static LoggingGenerator GenerateCode(string testData)
+        public static LoggingSourceGenerator GenerateCode(string testData)
         {
             return GenerateCodeInternal(Header + testData, out _);
         }
 
-        public static LoggingGenerator GenerateCodeExpectErrors(string testData, out ImmutableArray<Diagnostic> diagnostics)
+        public static LoggingSourceGenerator GenerateCodeExpectErrors(string testData, out ImmutableArray<Diagnostic> diagnostics)
         {
             return GenerateCodeInternal(Header + testData, out diagnostics, expectErrors: true);
         }
 
-        static LoggingGenerator GenerateCodeInternal(string testData, out ImmutableArray<Diagnostic> diagnostics, bool expectErrors = false)
+        static LoggingSourceGenerator GenerateCodeInternal(string testData, out ImmutableArray<Diagnostic> diagnostics, bool expectErrors = false)
         {
             var inputCompilation = CreateCompilation(testData);
 
-            var generator = new LoggingGenerator {WriteFilesToDisk = false};
+            var generator = new LoggingSourceGenerator();
             GeneratorDriver driver = CSharpGeneratorDriver.Create(generator);
             driver = driver.RunGeneratorsAndUpdateCompilation(inputCompilation, out var outputCompilation, out diagnostics);
 
             if (expectErrors == false)
             {
-                var errors = diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToArray();
-
-                foreach (var err in errors)
+                foreach (var err in diagnostics)
                 {
                     if (err.Location != null)
                     {
@@ -140,13 +179,17 @@ namespace Unity.Logging
                     Console.Error.WriteLine();
                 }
 
+                var errors = diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToArray();
                 Assert.AreEqual(0, errors.Length, "Errors were detected");
+                Assert.AreEqual(0, diagnostics.Length, "Warnings were detected");
             }
 
             Assert.IsNotNull(generator);
             Assert.IsNotNull(generator.methodsGenCode);
 
             var methodSource = generator.methodsGenCode.ToString();
+            var typesGenSource = generator.typesGenCode == null ? "" : generator.typesGenCode.ToString();
+            var parserGenSource = generator.parserGenCode == null ? "" : generator.parserGenCode.ToString();
 
             Assert.IsNotNull(methodSource);
 
@@ -158,9 +201,59 @@ namespace Unity.Logging
                 Assert.AreEqual(names.Count, hashSet.Count, "Struct names are not unique!");
             }
 
+            Assert.IsFalse(methodSource.Contains("in string"));
+            Assert.IsFalse(methodSource.Contains("in global::System.String"));
             Assert.IsFalse(methodSource.Contains("object msg"));
+            Assert.IsFalse(methodSource.Contains("unsafe"));
+            Assert.IsFalse(parserGenSource.Contains("unsafe"));
+            Assert.IsFalse(typesGenSource.Contains("unsafe"));
+
+
+            {
+                // validate that structs are generated only once
+                var lines = typesGenSource.Split('\n');
+                var structNamespace = lines.Select(l => l.Trim()).Where(l => l.StartsWith("namespace ") || l.StartsWith("public struct ")).ToArray();
+                var n = structNamespace.Length;
+                var currentNamespace = "";
+                var uniqHash = new HashSet<string>();
+                for (int i = 0; i < n; i++)
+                {
+                    var item = $"{currentNamespace} {structNamespace[i]}";
+                    if (structNamespace[i].StartsWith("namespace "))
+                    {
+                        currentNamespace = structNamespace[i];
+                    }
+                    else if (uniqHash.Add(item) == false)
+                    {
+                        Assert.Fail($"{item} was generated at least 2 times");
+                    }
+                }
+            }
+
+            StripDefaultLogs(generator);
 
             return generator;
+        }
+
+        private static void StripDefaultLogs(LoggingSourceGenerator generator)
+        {
+            foreach (var level in Enum.GetValues<LogCallKind>())
+            {
+                Assert.IsTrue(generator.invokeData.InvokeInstances.ContainsKey(level), "generator.invokeData.InvokeInstances.ContainsKey(level)");
+
+                var invokes = generator.invokeData.InvokeInstances[level];
+                for (var i = invokes.Count - 1; i >= 0; i--)
+                {
+                    var invoke = invokes[i];
+                    if (invoke.ArgumentData.Count == 0 && invoke.MessageData.FixedStringType.Name == FixedStringUtils.Smallest.Name && invoke.MessageData.LiteralValue == LogCallMessageData.DefaultFixedString32Literal)
+                    {
+                        invokes.RemoveAt(i);
+                    }
+                }
+
+                if (invokes.Count == 0)
+                    generator.invokeData.InvokeInstances.Remove(level);
+            }
         }
     }
 }

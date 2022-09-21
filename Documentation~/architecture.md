@@ -6,9 +6,11 @@ Then when `ScheduleUpdateLoggers` is called and it is actually executed - all lo
 
 So it is important to understand that the call of Log and processing the log have some distance in time. So when you're logging something - it doesn't immediately appear in sinks. That’s why the new logging solution is asynchronous. The benefit of this is that logging is significantly faster.
 
+Note: Timestamps and stacktraces will match the moment the logging are called.
+
 Note: `Log.Fatal` is planned to become synchronous, to avoid losing information on crash.
 
-Log messages can be sent to different `Loggers` that are stored in `LoggerManager`.
+Log messages can be sent to different `Loggers` that are stored in `LoggerManager` by calling `Log.To(loggerHandle).`
 
 Every `Logger` has:
 - unique handle (see `LoggerHandle` type).

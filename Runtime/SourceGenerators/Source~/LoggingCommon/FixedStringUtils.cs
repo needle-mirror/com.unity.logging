@@ -44,6 +44,8 @@ namespace SourceGenerator.Logging
             },
         };
 
+        public static readonly FSType Smallest = FSTypes[0];
+
         public static FSType GetFSType(string typeName)
         {
             foreach (var fs in FSTypes)
@@ -55,9 +57,9 @@ namespace SourceGenerator.Logging
             return new FSType();
         }
 
-        public static bool IsFixedString(string typeName)
+        public static bool IsNativeOrUnsafeText(string typeName)
         {
-            return GetFSType(typeName).IsValid;
+            return typeName == "NativeText" || typeName == "UnsafeText";
         }
 
         public static bool IsSpecialSerializableType(ITypeSymbol Symbol)
@@ -78,7 +80,7 @@ namespace SourceGenerator.Logging
                 case SpecialType.System_Double:
                     return true;
                 default:
-                    return GetFSType(Symbol.Name).IsValid; // it is fixed string
+                    return IsNativeOrUnsafeText(Symbol.Name) || GetFSType(Symbol.Name).IsValid;
             }
         }
 
@@ -95,19 +97,6 @@ namespace SourceGenerator.Logging
             context.LogCompilerError(CompilerMessages.MessageFixedStringError);
 
             return default;
-        }
-
-        public static int CompareFixedStringMaxLengths(string leftFSTypeName, string rightFSTypeName)
-        {
-            var left = GetFSType(leftFSTypeName);
-            if (!left.IsValid)
-                throw new System.ArgumentException($"FixedString type name '{leftFSTypeName}' is invalid.");
-
-            var right = GetFSType(rightFSTypeName);
-            if (!right.IsValid)
-                throw new System.ArgumentException($"FixedString type name '{rightFSTypeName}; is invalid.");
-
-            return left.MaxLength.CompareTo(right.MaxLength);
         }
     }
 }

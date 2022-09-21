@@ -1,3 +1,7 @@
+#if UNITY_DOTSRUNTIME || UNITY_2021_2_OR_NEWER
+#define LOGGING_USE_UNMANAGED_DELEGATES // C# 9 support, unmanaged delegates - gc alloc free way to call
+#endif
+
 using System;
 using System.Runtime.InteropServices;
 
@@ -17,24 +21,6 @@ namespace Unity.Logging
     internal struct ManagedOperations
     {
         /// <summary>
-        /// Delegate to retrieve the managed stack trace and copy it into the provided buffer.
-        /// </summary>
-        /// <remarks>
-        /// The destBuffer parameter must point to a valid fixed or native memory buffer large enough to hold the stack trace;
-        /// the string will be truncated if the buffer is too small. To determine the required size of the buffer, pass in 'null'
-        /// for the buffer parameter.
-        ///
-        /// NOTE: All length parameters and return values are in 'bytes' (NOT chars)
-        /// The returned stack trace string is converted from standard C# chars (UTF-16) to UTF-8 encoding.
-        /// </remarks>
-        /// <param name="destBuffer">Pointer to a valid memory buffer that'll receive the stack trace string; pass in 'null' to query the required size.</param>
-        /// <param name="bufferLength">Total length (in bytes) of the output buffer</param>
-        /// <param name="destIndex">Byte index within the buffer to begin copying; if not 0 make sure there's enough space from the starting point to the end of the buffer</param>
-        /// <returns>Number of bytes copied into destination buffer or the required buffer size of the stack trace if null was passed in.</returns>
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public unsafe delegate int SerializeStackTraceDelegate(byte* destBuffer, int bufferLength, int destIndex);
-
-        /// <summary>
         /// Delegate to write a text buffer to the system Console (stdout).
         /// </summary>
         /// <remarks>
@@ -49,83 +35,20 @@ namespace Unity.Logging
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public unsafe delegate void SystemWriteLineDelegate(byte* stringBuffer, int bufferLength, byte newLine);
 
+        private static bool s_Initialized;
+
         public static unsafe void Initialize()
         {
-            s_SerializeStackTraceDelegate = SerializeStackTraceImpl;
-            s_ConsoleWriteDelegate = ConsoleWriteImpl;
-
-            s_SerializeStackTraceFunctor.Data = new FunctionPointer<SerializeStackTraceDelegate>(Marshal.GetFunctionPointerForDelegate(s_SerializeStackTraceDelegate));
-            s_ConsoleWriteFunctor.Data = new FunctionPointer<SystemWriteLineDelegate>(Marshal.GetFunctionPointerForDelegate(s_ConsoleWriteDelegate));
+            if (s_Initialized) return;
+            s_Initialized = true;
+            Burst2ManagedCall<SystemWriteLineDelegate, ManagedOperationsDataContext>.Init(ConsoleWriteImpl);
         }
 
-        public static FunctionPointer<SerializeStackTraceDelegate> SerializeStackTrace => s_SerializeStackTraceFunctor.Data;
-
-        public static FunctionPointer<SystemWriteLineDelegate> SystemWriteLine => s_ConsoleWriteFunctor.Data;
+        public static FunctionPointer<SystemWriteLineDelegate> SystemWriteLine => Burst2ManagedCall<SystemWriteLineDelegate, ManagedOperationsDataContext>.Ptr();
 
         // FunctionPointers cannot be initialized as regular static variables (triggers Burst compile error) so must use SharedStatic instead
         private struct ManagedOperationsDataContext {}
-        private static SerializeStackTraceDelegate s_SerializeStackTraceDelegate;
-        private static SystemWriteLineDelegate s_ConsoleWriteDelegate;
-        private static readonly SharedStatic<FunctionPointer<SerializeStackTraceDelegate>> s_SerializeStackTraceFunctor = SharedStatic<FunctionPointer<SerializeStackTraceDelegate>>.GetOrCreate<FunctionPointer<SerializeStackTraceDelegate>, ManagedOperationsDataContext>(16);
-        private static readonly SharedStatic<FunctionPointer<SystemWriteLineDelegate>> s_ConsoleWriteFunctor = SharedStatic<FunctionPointer<SystemWriteLineDelegate>>.GetOrCreate<FunctionPointer<SystemWriteLineDelegate>, ManagedOperationsDataContext>(16);
 
-        [NotBurstCompatible]
-        [AOT.MonoPInvokeCallback(typeof(SerializeStackTraceDelegate))]
-        private static unsafe int SerializeStackTraceImpl(byte* destBuffer, int bufferLength, int destIndex)
-        {
-            string stackString;
-            int numBytes = 0;
-
-            if (bufferLength < 0 || destIndex < 0)
-                return 0;
-
-            try
-            {
-                int length = bufferLength - destIndex;
-
-                stackString = System.Environment.StackTrace;
-                numBytes = System.Text.Encoding.UTF8.GetByteCount(stackString);
-
-                // Pass in a null pointer to just get the required length of the stack trace
-                if (destBuffer != null && length > 0)
-                {
-                    // If the buffer is too small, need to truncate the string, but since it's encoding into UTF-8 the amount to chop off isn't obvious.
-                    // We'll assume most chars can be encoded with 1 byte (ASCII values) with some content needed 2 bytes, e.g. non-English file paths,
-                    // which may average out to 1.25 bytes per char.
-                    while (numBytes > length)
-                    {
-                        int byteDiff = numBytes - length;
-                        int charsToTrim = (int)(byteDiff * 1.25f);
-
-                        if (charsToTrim >= stackString.Length)
-                        {
-                            stackString = String.Empty;
-                            numBytes = 0;
-                            break;
-                        }
-
-                        // Check the required bytes of the new string and if still too long then try again
-                        stackString = stackString.Substring(0, stackString.Length - charsToTrim);
-                        numBytes = System.Text.Encoding.UTF8.GetByteCount(stackString);
-                    }
-
-                    fixed(char* pString = stackString)
-                    {
-                        numBytes = System.Text.Encoding.UTF8.GetBytes(pString, stackString.Length, &destBuffer[destIndex], numBytes);
-                    }
-                }
-                else if (destBuffer != null)
-                {
-                    // Valid buffer was specified but actual length is too small
-                    numBytes = 0;
-                }
-            }
-            catch { numBytes = 0; }
-
-            return numBytes;
-        }
-
-        [NotBurstCompatible]
         [AOT.MonoPInvokeCallback(typeof(SystemWriteLineDelegate))]
         private static unsafe void ConsoleWriteImpl(byte* stringBuffer, int bufferLength, byte newLine)
         {
@@ -224,7 +147,15 @@ namespace Unity.Logging
 #if UNITY_DOTSRUNTIME
             Unity.Logging.DotsRuntimePrintWrapper.ConsoleWrite(data, length, newLine);
 #else
-            Unity.Logging.ManagedOperations.SystemWriteLine.Invoke(data, length, newLine);
+            var ptr = Unity.Logging.ManagedOperations.SystemWriteLine;
+    #if LOGGING_USE_UNMANAGED_DELEGATES
+            unsafe
+            {
+                ((delegate * unmanaged[Cdecl] <byte*, int, byte, void>)ptr.Value)(data, length, newLine);
+            }
+    #else
+            ptr.Invoke(data, length, newLine);
+    #endif
 #endif
         }
 
@@ -242,7 +173,15 @@ namespace Unity.Logging
 #if UNITY_DOTSRUNTIME
                 Unity.Logging.DotsRuntimePrintWrapper.ConsoleWrite(data, length, newLine);
 #else
-                ManagedOperations.SystemWriteLine.Invoke(data, length, newLine);
+                var ptr = Unity.Logging.ManagedOperations.SystemWriteLine;
+    #if LOGGING_USE_UNMANAGED_DELEGATES
+                unsafe
+                {
+                    ((delegate * unmanaged[Cdecl] <byte*, int, byte, void>)ptr.Value)(data, length, newLine);
+                }
+    #else
+                ptr.Invoke(data, length, newLine);
+    #endif
 #endif
             }
         }
@@ -261,50 +200,17 @@ namespace Unity.Logging
 #if UNITY_DOTSRUNTIME
                 Unity.Logging.DotsRuntimePrintWrapper.ConsoleWrite(data, length, newLine);
 #else
-                ManagedOperations.SystemWriteLine.Invoke(data, length, newLine);
+                var ptr = Unity.Logging.ManagedOperations.SystemWriteLine;
+    #if LOGGING_USE_UNMANAGED_DELEGATES
+                unsafe
+                {
+                    ((delegate * unmanaged[Cdecl] <byte*, int, byte, void>)ptr.Value)(data, length, newLine);
+                }
+    #else
+                ptr.Invoke(data, length, newLine);
+    #endif
 #endif
             }
         }
-
-        /// <summary>
-        /// Schedule <see cref="BeginBatch"/> call in a job
-        /// </summary>
-        /// <param name="inputDeps">Dependency that should complete before this job</param>
-        /// <returns>JobHandle for just scheduled job</returns>
-        public static JobHandle ScheduleBeginBatch(JobHandle inputDeps)
-        {
-            return new BeginBatchJob().Schedule(inputDeps);
-        }
-
-        [BurstCompile]
-        private struct BeginBatchJob : IJob { public void Execute() { BeginBatch(); } }
-
-
-        /// <summary>
-        /// Schedule <see cref="EndBatch"/> call in a job
-        /// </summary>
-        /// <param name="inputDeps">Dependency that should complete before this job</param>
-        /// <returns>JobHandle for just scheduled job</returns>
-        public static JobHandle ScheduleEndBatch(JobHandle inputDeps)
-        {
-            return new EndBatchJob().Schedule(inputDeps);
-        }
-
-        [BurstCompile]
-        private struct EndBatchJob : IJob { public void Execute() { EndBatch(); } }
-
-
-        /// <summary>
-        /// Schedule <see cref="Flush"/> call in a job
-        /// </summary>
-        /// <param name="inputDeps">Dependency that should complete before this job</param>
-        /// <returns>JobHandle for just scheduled job</returns>
-        public static JobHandle ScheduleFlush(JobHandle inputDeps)
-        {
-            return new FlushJob().Schedule(inputDeps);
-        }
-
-        [BurstCompile]
-        private struct FlushJob : IJob { public void Execute() { Flush(); } }
     }
 }

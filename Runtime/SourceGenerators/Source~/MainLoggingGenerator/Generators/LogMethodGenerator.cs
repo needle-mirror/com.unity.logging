@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
@@ -30,7 +32,7 @@ namespace SourceGenerator.Logging
                 m_Context = context
             };
 
-            if (!generator.ExtractLogInvocationData(out var data))
+            if (!generator.ExtractLogInvocationData(context, out var data))
                 return false;
 
             generatedCode = LogMethodEmitter.Emit(context, data, assemblyHash);
@@ -38,7 +40,7 @@ namespace SourceGenerator.Logging
             return true;
         }
 
-        private bool ExtractLogInvocationData(out LogCallsCollection data)
+        private bool ExtractLogInvocationData(GeneratorExecutionContext context, out LogCallsCollection data)
         {
             using var _ = new Profiler.Auto("LogMethodGenerator.ExtractLogInvocationData");
 
@@ -46,33 +48,36 @@ namespace SourceGenerator.Logging
 
             // Get all the instances of calls to Log.Info from the syntax processor
             var syntaxReceiver = (LogCallFinder)m_Context.SyntaxReceiver;
-            if (syntaxReceiver == null || syntaxReceiver.LogCalls.Count <= 0)
+            if (syntaxReceiver == null)
             {
-                if (syntaxReceiver == null)
-                    Debug.LogVerbose(m_Context, $"[ExtractLogCall][FAIL] syntaxReceiver == null");
-                else
-                    Debug.LogVerbose(m_Context, $"[ExtractLogCall] syntaxReceiver.LogCalls.Count = {syntaxReceiver.LogCalls.Count}");
+                Debug.LogVerbose(m_Context, $"[ExtractLogCall][FAIL] syntaxReceiver == null");
                 return false;
             }
 
             var instances = new Dictionary<LogCallKind, List<LogCallData>>();
+
+            var allLevels = Enum.GetValues(typeof(LogCallKind));
+            // we generate all types of Log. calls so user can see them in the autocompletion
+            foreach (LogCallKind kind in allLevels)
+                instances[kind] = new List<LogCallData>(32);
+
             for (var i = 0; i < syntaxReceiver.LogCalls.Count; i++)
             {
+                context.CancellationToken.ThrowIfCancellationRequested();
+
                 var logCall = syntaxReceiver.LogCalls[i];
                 var logCallLevel = syntaxReceiver.LogCallsLevel[i];
 
-                if (ExtractLogCall(logCall, logCallLevel, out var invokeInstData))
+                if (ExtractLogCall(context, logCall, logCallLevel, out var invokeInstData))
                 {
                     Debug.LogVerbose(m_Context, $"[ExtractLogCall] Extracted <{logCallLevel}> Log Call: <{logCall}>\n{logCall.GetLocation()}\n");
 
-                    // Check if this is a new invocation and if so add it to the list
-                    if (instances.TryGetValue(logCallLevel, out var ins) == false)
-                    {
-                        ins = new List<LogCallData>(32);
-                        instances[logCallLevel] = ins;
-                    }
+                    UpdateInvocationListWithNewInstance(instances[logCallLevel], invokeInstData);
 
-                    UpdateInvocationListWithNewInstance(ins, invokeInstData);
+                    if (invokeInstData.HasLiteralStringMessage)
+                    {
+                        AnalyzeMessageStringWarnings(context, logCallLevel, in invokeInstData);
+                    }
                 }
                 else
                 {
@@ -80,22 +85,131 @@ namespace SourceGenerator.Logging
                 }
             }
 
-            var total = instances.Sum(ins => ins.Value.Count);
-            if (total > 0)
+            foreach (LogCallKind kind in allLevels)
             {
-                var dictOfList = new Dictionary<LogCallKind, List<LogCallArgumentData>>(m_ArgumentRegistryLevel.Count);
-                foreach (var v in m_ArgumentRegistryLevel)
-                {
-                    dictOfList[v.Key] = v.Value.Values.ToList();
-                }
-
-                data = new LogCallsCollection(instances, dictOfList);
+                UpdateInvocationListWithNewInstance(instances[kind], new LogCallData(LogCallMessageData.FixedString32(context), Array.Empty<LogCallArgumentData>()));
             }
 
-            return data.IsValid;
+            var dictOfList = new Dictionary<LogCallKind, List<LogCallArgumentData>>(m_ArgumentRegistryLevel.Count);
+            foreach (var v in m_ArgumentRegistryLevel)
+            {
+                dictOfList[v.Key] = v.Value.Values.ToList();
+            }
+
+            data = new LogCallsCollection(instances, dictOfList);
+
+            return true;
         }
 
-        private bool ExtractLogCall(InvocationExpressionSyntax textLoggerWriteCall, LogCallKind logCallKind, out LogCallData data)
+        private void AnalyzeMessageStringWarnings(GeneratorExecutionContext context, LogCallKind level, in LogCallData invokeInstData)
+        {
+            if (level == LogCallKind.Decorate) return;
+
+            var loc = invokeInstData.MessageData.Expression?.GetLocation();
+
+            if (loc == null && invokeInstData.ArgumentData.Count > 0)
+            {
+                loc = invokeInstData.ArgumentData[0].Expression?.GetLocation();
+            }
+
+            if (loc == null)
+            {
+                loc = context.Compilation.SyntaxTrees.First().GetRoot().GetLocation();
+            }
+
+            var analysis = new MessageParserAnalysis(invokeInstData.MessageData.LiteralValue);
+
+            if (analysis.Success == false)
+            {
+                var err = analysis.ParseRes.Errors.FirstOrDefault();
+                if (err != null)
+                {
+                    loc = invokeInstData.MessageData.GetLocation(context, err.segment.Offset, err.segment.Length);
+
+                    context.LogCompilerLiteralMessage(CompilerMessages.LiteralMessageGeneralError.Item1, CompilerMessages.LiteralMessageGeneralError.Item2, loc);
+                }
+
+                //
+                return;
+            }
+
+            // first let's check if there are no malformed holes
+            var invalidArg = analysis.Arguments.FirstOrDefault(a => a.argumentInfo.IsValid == false);
+            if (invalidArg != null)
+            {
+                loc = invokeInstData.MessageData.GetLocation(context, invalidArg.segment.Offset, invalidArg.segment.Length);
+
+                context.LogCompilerLiteralMessageInvalidArgument(invalidArg.ToString(), loc);
+                return;
+            }
+
+            // now count check
+            var parsedArgs = analysis.Arguments;
+
+            var parsedArgsCount = parsedArgs.Count;
+
+            if (analysis.HasNamedArgument == false)
+            {
+                // Log.Info("{0} {0} {0} {1}", 42, 2432);
+
+                var args = parsedArgs.Select(a => a.argumentInfo.Index).ToImmutableHashSet();
+                parsedArgsCount = args.Count;
+
+                for (var i = 0; i < parsedArgsCount; i++)
+                {
+                    // Log.Info("{0} {2}", 42, 2432, 23); -- 2432 is not used, {1} was missed
+
+                    if (args.Contains(i) == false)
+                    {
+                        // missed number
+                        context.LogCompilerLiteralMessageMissingIndexArg(i, loc);
+                        return;
+                    }
+                }
+            }
+            else
+            {
+                // all arguments must be unique
+
+                var hashSetNames = new HashSet<string>();
+                foreach (var arg in parsedArgs)
+                {
+                    var name = arg.argumentInfo.Name;
+                    if (string.IsNullOrEmpty(name))
+                    {
+                        name = arg.argumentInfo.Index.ToString();
+                    }
+
+                    if (hashSetNames.Add(name) == false)
+                    {
+                        loc = invokeInstData.MessageData.GetLocation(context, arg.segment.Offset, arg.segment.Length);
+                        context.LogCompilerLiteralMessageRepeatingNamedArg(arg.argumentInfo.ToString(), loc);
+                        return;
+                    }
+                }
+            }
+
+            if (parsedArgsCount > invokeInstData.ArgumentData.Count)
+            {
+                // not enough arguments for the function
+                var missingArgInStr = parsedArgs[invokeInstData.ArgumentData.Count];
+                loc = invokeInstData.MessageData.GetLocation(context, missingArgInStr.segment.Offset, missingArgInStr.segment.Length);
+
+                context.LogCompilerLiteralMessageMissingArgForHole(missingArgInStr.argumentInfo.ToString(), loc);
+                return;
+            }
+
+            if (parsedArgsCount < invokeInstData.ArgumentData.Count)
+            {
+                // too much arguments for the function
+                loc = invokeInstData.ArgumentData[parsedArgsCount].Expression.GetLocation();
+
+                context.LogCompilerLiteralMessageMissingHoleForArg(loc);
+                return;
+            }
+        }
+
+        private bool ExtractLogCall(GeneratorExecutionContext context, InvocationExpressionSyntax textLoggerWriteCall, LogCallKind logCallKind, out LogCallData data)
         {
             using var _ = new Profiler.Auto("LogMethodGenerator.ExtractLogCall");
 
@@ -131,7 +245,7 @@ namespace SourceGenerator.Logging
                     return false;
                 }
 
-                if (!GenerateDefaultMessageData(msgData.Symbol, argsCount, out msgData))
+                if (!GenerateDefaultMessageData(context, msgData.Symbol, argsCount, out msgData))
                     return false;
             }
 
@@ -272,7 +386,7 @@ namespace SourceGenerator.Logging
             return data.IsValid;
         }
 
-        private bool GenerateDefaultMessageData(ITypeSymbol typeSymbol, int numArgs, out LogCallMessageData data)
+        private bool GenerateDefaultMessageData(GeneratorExecutionContext context, ITypeSymbol typeSymbol, int numArgs, out LogCallMessageData data)
         {
             using var _ = new Profiler.Auto("LogMethodGenerator.GenerateDefaultMessageData");
 
@@ -291,7 +405,8 @@ namespace SourceGenerator.Logging
 
             if (msgType.IsValid)
             {
-                data = LogCallMessageData.LiteralAsFixedString(typeSymbol, null, msgType, message);
+                var strType = context.Compilation.GetTypeByMetadataName("System.String");
+                data = LogCallMessageData.OmittedLiteralAsFixedString(strType, message);
             }
             else
             {
@@ -331,10 +446,12 @@ namespace SourceGenerator.Logging
 
         bool MergeLogCallData(ref LogCallData newCall, ref LogCallData oldCall)
         {
-            var mergedMessageType = MergeTypes(newCall.MessageData, oldCall.MessageData);
-            if (mergedMessageType.IsValid == false)
+            var newMessage = newCall.MessageData;
+            var oldMessage = oldCall.MessageData;
+
+            var ableToMerge = MergeTypes(ref newMessage, ref oldMessage);
+            if (ableToMerge == false)
             {
-                // messages are not merged
                 return false;
             }
 
@@ -344,13 +461,13 @@ namespace SourceGenerator.Logging
             if (needToReplaceOldCall)
             {
                 // oldCall will be deleted
-                newCall = new LogCallData(mergedMessageType, mergedArguments);
+                newCall = new LogCallData(newMessage, mergedArguments);
             }
             else
             {
                 // update newCall and oldCall with common message type
-                oldCall = new LogCallData(mergedMessageType, oldCall.ArgumentData);
-                newCall = new LogCallData(mergedMessageType, newCall.ArgumentData);
+                oldCall = new LogCallData(oldMessage, oldCall.ArgumentData);
+                newCall = new LogCallData(newMessage, newCall.ArgumentData);
             }
 
             return needToReplaceOldCall;
@@ -375,17 +492,21 @@ namespace SourceGenerator.Logging
             return mergedArguments;
         }
 
-        private LogCallMessageData MergeTypes(LogCallMessageData newMessageData, LogCallMessageData oldMessageData)
+        private bool MergeTypes(ref LogCallMessageData newMessageData, ref LogCallMessageData oldMessageData)
         {
-            if (newMessageData.MessageType == oldMessageData.MessageType)
-                return oldMessageData;
+            if (newMessageData.Omitted == oldMessageData.Omitted && newMessageData.MessageType == oldMessageData.MessageType)
+                return true;
 
             if (newMessageData.FixedStringType.IsValid && oldMessageData.FixedStringType.IsValid)
             {
-                return newMessageData.FixedStringType.MaxLength > oldMessageData.FixedStringType.MaxLength ? newMessageData : oldMessageData;
+                if (newMessageData.FixedStringType.MaxLength > oldMessageData.FixedStringType.MaxLength)
+                    oldMessageData = newMessageData;
+                else
+                    newMessageData = oldMessageData;
+                return true;
             }
 
-            return default;
+            return false;
         }
 
         private LogCallArgumentData MergeTypes(LogCallArgumentData newArgumentData, LogCallArgumentData oldArgumentData)
@@ -406,9 +527,10 @@ namespace SourceGenerator.Logging
             using var _ = new Profiler.Auto("LogMethodGenerator.UpdateInvocationListWithNewInstance");
 
             // Check if we already have an Invocation instance that matches newInst's signature, and if so don't add the new invocation record
-
-            if (currInvocations.FirstOrDefault(i => i.Equals(newInst)).IsValid)
+            if (currInvocations.Any(a => a.Equals(newInst)))
+            {
                 return;
+            }
 
             // find all the 'same' calls and merge into one
 

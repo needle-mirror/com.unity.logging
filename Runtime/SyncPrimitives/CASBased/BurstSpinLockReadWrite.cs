@@ -1,7 +1,15 @@
 //#define DEBUG_DEADLOCKS
-//#define USE_BASELIB
 
-#if ENABLE_UNITY_COLLECTIONS_CHECKS
+#if UNITY_DOTSRUNTIME
+#define USE_BASELIB
+#define USE_BASELIB_FILEIO
+#endif
+
+#if USE_BASELIB
+//#define MARK_THREAD_OWNERS
+#endif
+
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
 #define DEBUG_ADDITIONAL_CHECKS
 #endif
 
@@ -15,6 +23,7 @@ using Unity.Burst;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.IL2CPP.CompilerServices;
+using Unity.Jobs.LowLevel.Unsafe;
 
 namespace Unity.Logging
 {
@@ -29,7 +38,7 @@ namespace Unity.Logging
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void EnterExclusive(ref long lockVar, ref long readersVar)
         {
-#if USE_BASELIB
+#if MARK_THREAD_OWNERS
             var threadId = Baselib.LowLevel.Binding.Baselib_Thread_GetCurrentThreadId().ToInt64();
             BurstSpinLockCheckFunctions.CheckForRecursiveLock(threadId, ref lockVar);
 #else
@@ -75,7 +84,7 @@ namespace Unity.Logging
             if (Interlocked.Read(ref readersVar) != 0)
                 return false;
 
-#if USE_BASELIB
+#if MARK_THREAD_OWNERS
             var threadId = Baselib.LowLevel.Binding.Baselib_Thread_GetCurrentThreadId().ToInt64();
             BurstSpinLockCheckFunctions.CheckForRecursiveLock(threadId, ref lockVar);
 #else
@@ -155,18 +164,6 @@ namespace Unity.Logging
                 throw new Exception("Reader count cannot be negative!");
         }
 
-        /// <summary>
-        /// After EnterRead you can call UpgradeReadToWriteLock to make this lock Exclusive
-        /// </summary>
-        /// <param name="lockVar"></param>
-        /// <param name="readersVar"></param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void UpgradeReadToWriteLock(ref long lockVar, ref long readersVar)
-        {
-            ExitRead(ref readersVar);
-            EnterExclusive(ref lockVar, ref readersVar);
-        }
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool HasReadLock(ref long readLock)
         {
@@ -183,16 +180,16 @@ namespace Unity.Logging
     [Il2CppSetOption(Option.DivideByZeroChecks, false)]
     internal struct BurstSpinLockReadWrite : IDisposable
     {
-        private const int MemorySize = 128;
+        private const int MemorySize = 16; // * sizeof(long) == 128 byte
         private const int LockLocation = 0;
-        private const int ReadersLocation = 64;
+        private const int ReadersLocation = 8; // * sizeof(long) == 64 byte offset (cache line)
 
         [Conditional("DEBUG_ADDITIONAL_CHECKS")]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void CheckIfLockCreated()
         {
             if (m_Locked.IsCreated == false)
-                throw new Exception("Lock wasn't created, but you're accessing it");
+                throw new Exception("RWLock wasn't created, but you're accessing it");
         }
 
         /// <summary>
@@ -249,14 +246,6 @@ namespace Unity.Logging
             BurstSpinLockReadWriteFunctions.ExitRead(ref m_Locked.ElementAt(ReadersLocation));
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void UpgradeReadToWriteLock()
-        {
-            CheckIfLockCreated();
-
-            BurstSpinLockReadWriteFunctions.UpgradeReadToWriteLock(ref m_Locked.ElementAt(LockLocation), ref m_Locked.ElementAt(ReadersLocation));
-        }
-
         private UnsafeList<long> m_Locked;
 
         /// <summary>
@@ -280,10 +269,19 @@ namespace Unity.Logging
         public void Dispose()
         {
             if (m_Locked.IsCreated)
+            {
+                EnterExclusive();
                 m_Locked.Dispose();
+            }
         }
 
         public bool Locked => Interlocked.Read(ref m_Locked.ElementAt(LockLocation)) != 0;
+        public bool LockedForRead => Interlocked.Read(ref m_Locked.ElementAt(ReadersLocation)) != 0;
+
         public bool IsCreated => m_Locked.IsCreated;
+        public long Id
+        {
+            get { unsafe { return (long)m_Locked.Ptr; } }
+        }
     }
 }

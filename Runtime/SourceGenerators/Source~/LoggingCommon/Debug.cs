@@ -13,57 +13,8 @@ namespace SourceGenerator.Logging
 {
     internal static class Debug
     {
-        private static string ProjectPath { get; set; } = "";
-        private static string OutputFolder { get; set; } = Path.Combine("Temp", "LoggingGenerated");
-
-
-        private static readonly Dictionary<string, string> s_ctx2LogName = new();
-        private static string GetLogFile(GeneratorExecutionContext ctx)
-        {
-            lock (s_ctx2LogName)
-            {
-                var asmName = $"#{Thread.CurrentThread.ManagedThreadId}_{ctx.Compilation.AssemblyName}";
-
-                if (s_ctx2LogName.TryGetValue(asmName, out var logName))
-                    return logName;
-
-                logName = $"Log_{Guid.NewGuid()}.log";
-                s_ctx2LogName[asmName] = logName;
-
-                return logName;
-            }
-        }
-
-        private static string GetOutputPath(GeneratorExecutionContext ctx)
-        {
-            if (string.IsNullOrEmpty(ProjectPath))
-            {
-                ProjectPath = Environment.CurrentDirectory;
-                var l = ProjectPath.LastIndexOf("/Library/");
-                if (l < 0)
-                    l = ProjectPath.LastIndexOf("\\Library\\");
-
-                if (l >= 0)
-                    ProjectPath = ProjectPath.Substring(0, l);
-            }
-
-            var assemblyName = ctx.Compilation.AssemblyName;
-
-            var outputPath = Path.Combine(ProjectPath, OutputFolder, assemblyName);
-            if (!Directory.Exists(outputPath))
-                Directory.CreateDirectory(outputPath);
-            return outputPath;
-        }
-
-        private static string GetLogFilePath(GeneratorExecutionContext ctx)
-        {
-            return Path.Combine(GetOutputPath(ctx), GetLogFile(ctx));
-        }
-
         static TextWriter GetLogWriter(GeneratorExecutionContext ctx)
         {
-            if(!ctx.ParseOptions.PreprocessorSymbolNames.Contains("UNITY_2021_2_OR_NEWER"))
-                return File.AppendText(GetLogFilePath(ctx));
             return Console.Out;
         }
 

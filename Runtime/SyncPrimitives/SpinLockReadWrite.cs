@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Unity.Collections;
 using Unity.IL2CPP.CompilerServices;
@@ -20,19 +21,19 @@ namespace Unity.Logging
         [Il2CppSetOption(Option.DivideByZeroChecks, false)]
         public struct ScopedExclusiveLock : IDisposable
         {
-            private SpinLockReadWrite m_lock;
+            private SpinLockReadWrite m_parentLock;
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public ScopedExclusiveLock(SpinLockReadWrite sl)
             {
-                m_lock = sl;
-                m_lock.Lock();
+                m_parentLock = sl;
+                m_parentLock.Lock();
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void Dispose()
             {
-                m_lock.Unlock();
+                m_parentLock.Unlock();
             }
         }
 
@@ -41,19 +42,19 @@ namespace Unity.Logging
         [Il2CppSetOption(Option.DivideByZeroChecks, false)]
         public struct ScopedReadLock : IDisposable
         {
-            private SpinLockReadWrite m_lock;
+            private SpinLockReadWrite m_parentLock;
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public ScopedReadLock(SpinLockReadWrite sl)
             {
-                m_lock = sl;
-                m_lock.LockRead();
+                m_parentLock = sl;
+                m_parentLock.LockRead();
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void Dispose()
             {
-                m_lock.UnlockRead();
+                m_parentLock.UnlockRead();
             }
         }
 
@@ -95,10 +96,21 @@ namespace Unity.Logging
             m_lock.ExitRead();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void UpgradeReadToWriteLock()
+        public bool Locked => m_lock.Locked;
+        public bool LockedForRead => m_lock.LockedForRead;
+
+        [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS"), Conditional("UNITY_DOTS_DEBUG")]
+        public void MustBeExclusivelyLocked()
         {
-            m_lock.UpgradeReadToWriteLock();
+            if (m_lock.Locked == false)
+                throw new Exception("SpinLock is not exclusively locked!");
+        }
+
+        [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS"), Conditional("UNITY_DOTS_DEBUG")]
+        public void MustBeReadLocked()
+        {
+            if (m_lock.LockedForRead == false)
+                throw new Exception("SpinLock is not read locked!");
         }
     }
 }

@@ -57,9 +57,8 @@ namespace Unity.Logging.Internal.Debug
         /// </summary>
         /// <param name="sinkSystem">Sink that caused the error</param>
         /// <param name="reason">Description of the error</param>
-        /// <typeparam name="T">ILogger type</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void OnSinkFatalError<T>(SinkSystemBase<T> sinkSystem, FixedString512Bytes reason) where T : struct, ILogger
+        public static void OnSinkFatalError(SinkSystemBase sinkSystem, FixedString512Bytes reason)
         {
             WriteToSelfLog(reason);
         }
@@ -105,6 +104,39 @@ namespace Unity.Logging.Internal.Debug
         }
 
         /// <summary>
+        /// Template is empty - so nothing will be logged
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void OnEmptyTemplate()
+        {
+            WriteToSelfLog(Errors.EmptyTemplateForTextLogger);
+        }
+
+        /// <summary>
+        /// Payload had a TypeId wasn't parsed because the list of parsers was empty for some reason
+        /// </summary>
+        /// <param name="typeId">TypeId that is unknown</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void OnUnknownTypeIdBecauseOfEmptyHandlers(ulong typeId)
+        {
+            var msg = Errors.UnknownTypeIdBecauseOfEmptyHandlers;
+            msg.Append(typeId);
+            WriteToSelfLog(msg);
+        }
+
+        /// <summary>
+        /// Payload had a TypeId that no parser know how to parse
+        /// </summary>
+        /// <param name="typeId">TypeId that is unknown</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void OnUnknownTypeId(ulong typeId)
+        {
+            var msg = Errors.UnknownTypeId;
+            msg.Append(typeId);
+            WriteToSelfLog(msg);
+        }
+
+        /// <summary>
         /// Write error to SelfLog
         /// </summary>
         /// <param name="errorMessage">Error message</param>
@@ -136,7 +168,7 @@ namespace Unity.Logging.Internal.Debug
             private static readonly List<TestScope> Scopes = new List<TestScope>(32);
 
             [BurstDiscard]
-            [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS")]
+            [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS"), Conditional("UNITY_DOTS_DEBUG")] // ENABLE_UNITY_COLLECTIONS_CHECKS or UNITY_DOTS_DEBUG
             internal static void CheckMessage(FixedString4096Bytes message)
             {
                 if (Scopes.Count == 0) return;
@@ -172,7 +204,7 @@ namespace Unity.Logging.Internal.Debug
                 /// Expecting to have a message
                 /// </summary>
                 /// <param name="expected">Message that is expected in <see cref="SelfLog"/></param>
-                [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS")]
+                [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS"), Conditional("UNITY_DOTS_DEBUG")] // ENABLE_UNITY_COLLECTIONS_CHECKS or UNITY_DOTS_DEBUG
                 public void ExpectErrorThatContains(FixedString4096Bytes expected)
                 {
                     UnityEngine.Assertions.Assert.IsTrue(m_ExpectedMessages.IsCreated, "m_ExpectedMessages.IsCreated is false. Forgot to create TestScope?");
@@ -182,7 +214,7 @@ namespace Unity.Logging.Internal.Debug
                 /// <summary>
                 /// Out of memory message is expected
                 /// </summary>
-                [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS")]
+                [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS"), Conditional("UNITY_DOTS_DEBUG")] // ENABLE_UNITY_COLLECTIONS_CHECKS or UNITY_DOTS_DEBUG
                 public void ExpectingOutOfMemory()
                 {
                     ExpectErrorThatContains("Failed to allocate memory");
@@ -192,7 +224,7 @@ namespace Unity.Logging.Internal.Debug
                 /// Checks if this message is expected
                 /// </summary>
                 /// <param name="message">The message to check</param>
-                [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS")]
+                [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS"), Conditional("UNITY_DOTS_DEBUG")] // ENABLE_UNITY_COLLECTIONS_CHECKS or UNITY_DOTS_DEBUG
                 public void CheckMessage(FixedString4096Bytes message)
                 {
                     UnityEngine.Assertions.Assert.IsTrue(m_ExpectedMessages.IsCreated, "m_ExpectedMessages.IsCreated is false. Forgot to create TestScope?");

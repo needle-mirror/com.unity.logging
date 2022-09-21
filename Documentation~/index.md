@@ -16,12 +16,7 @@ This library has the following dependencies:
 The Logging package has the following limitations:
 
 - You must adjust the package's asmdef file like so:
-  - Enable 'unsafe' code
   - Add 'com.unity.collections'
   - Add 'com.unity.burst'
 - Because the logging is asynchronous, you can't rely on it to flush the messages before a crash. This will be addressed in a future release.
 - Reference types support is limited, but more reference types will be added in a future release.
-
-## DOTS Runtime Project specifics
-
-To use this library within a DOTS Runtime project, you must use DOTS Runtime version 0.26.

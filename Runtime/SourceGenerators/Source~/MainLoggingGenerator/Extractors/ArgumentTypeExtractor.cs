@@ -59,37 +59,36 @@ namespace MainLoggingGenerator.Extractors
             }
             else if (typeSymbol.TypeKind == TypeKind.Enum)
             {
-                m_Context.LogCompilerErrorEnumUnsupported(expression.GetLocation());
-
-                // NOTE: We can't call ToString() on the enum variable (not Burstable) but instead we could create a lookup table
-                // within the generated struct mapping values to their string equivalents, extracted from the syntax tree.
+                // NOTE: Enums will be handled as convertible-to-string, and passed as string in PayloadBuffer
+                data = new LogCallArgumentData(typeSymbol, typeSymbol.Name, literalValue, expression);
             }
             else if (LogMethodGenerator.IsValidFixedStringType(m_Context, typeSymbol, out var fsType))
             {
                 // FixedString types are supported directly and will be treated like primitive value types
                 data = LogCallArgumentData.LiteralAsFixedString(typeSymbol, fsType, literalValue, expression);
             }
+            else if (FixedStringUtils.IsNativeOrUnsafeText(typeSymbol.Name))
+            {
+                // Unsafe/Native Text collection type
+                data = new LogCallArgumentData(typeSymbol, typeSymbol.Name, literalValue, expression);
+            }
             else if (typeSymbol.IsValueType)
             {
-                // Other non-struct value types *should* work, e.g. int or float, we'll generate a struct with a single field for the argument value
+                // structs will generate a mirror blittable struct
                 data = new LogCallArgumentData(typeSymbol, typeSymbol.Name, literalValue, expression);
             }
             else if (string.IsNullOrEmpty(literalValue) == false)
             {
-                // A literal (string or otherwise) may be used as a structure argument; will be passed via FixedString struct
-
-                var fixedString = FixedStringUtils.GetSmallestFixedStringTypeForMessage(literalValue, m_Context);
-
-                if (fixedString.IsValid)
-                {
-                    qualifiedName = "Unity.Collections." + fixedString;
-
-                    data = LogCallArgumentData.LiteralAsFixedString(typeSymbol, fixedString, literalValue, expression);
-                }
+                data = new LogCallArgumentData(typeSymbol, "string", literalValue, expression);
             }
-            else if (typeSymbol.TypeKind == TypeKind.Structure)
+            else if (typeSymbol.SpecialType == SpecialType.System_String)
             {
-                // Typically log argument are structures (structs)
+                // String will be converted to UnsafeString in log method
+                data = new LogCallArgumentData(typeSymbol, "string", literalValue, expression);
+            }
+            else if (typeSymbol.IsReferenceType)
+            {
+                // These will be treated as strings using ToString()
                 data = new LogCallArgumentData(typeSymbol, typeSymbol.Name, literalValue, expression);
             }
             else

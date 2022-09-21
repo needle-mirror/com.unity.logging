@@ -23,6 +23,29 @@ namespace Unity.Logging
     }
 
     /// <summary>
+    /// How Logger should synchronise logging messages.<br/>
+    /// Async is usually faster than Sync, but can lead to lost messages.<br/>
+    /// FatalIsSync works like async for all types of messages but Fatal. It will flush all the message queue when Fatal message appears.
+    /// </summary>
+    public enum SyncMode : byte
+    {
+        /// <summary>
+        /// All messages are processed asynchronous, after they were logged. But if Fatal message is logged - log is flushed.
+        /// Use this option if you want speed, but also want to make sure logs are not lost in case of Fatal error
+        /// </summary>
+        FatalIsSync,
+        /// <summary>
+        /// All messages are processed asynchronous, after they were logged.
+        /// This is the fastest way, but can lead to lost messages in case of crashes
+        /// </summary>
+        FullAsync,
+        /// <summary>
+        /// All messages are processed immediately. Slowest mode, but all messages are guaranteed to be logged
+        /// </summary>
+        FullSync
+    }
+
+    /// <summary>
     /// FixedString representation of <see cref="LogLevel"/>
     /// </summary>
     public static class Consts

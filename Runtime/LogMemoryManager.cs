@@ -1,5 +1,7 @@
 //#define LOGGING_MEM_DEBUG
 
+using PayloadLockHashMap = Unity.Collections.LowLevel.Unsafe.UnsafeParallelHashMap<Unity.Logging.PayloadHandle, Unity.Logging.PayloadBufferLockData>;
+
 using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
@@ -16,7 +18,7 @@ namespace Unity.Logging
     /// Initialization parameters for <see cref="LogMemoryManager"/>.
     /// </summary>
     [BurstCompile]
-    [BurstCompatible]
+    [GenerateTestsForBurstCompatibility]
     public struct LogMemoryManagerParameters
     {
         /// <summary>
@@ -218,7 +220,7 @@ namespace Unity.Logging
     /// the Payload buffer must be released, typically performed automatically by <see cref="LogController"/>.
     /// </remarks>
     [BurstCompile]
-    [BurstCompatible]
+    [GenerateTestsForBurstCompatibility]
     public struct LogMemoryManager
     {
         /// <summary>
@@ -384,12 +386,12 @@ namespace Unity.Logging
             m_UpdateLock = new SpinLockReadWrite(Allocator.Persistent);
 
             // Hashmap Capacity is the number of individual Payload buffers that must be locked simultaneously
-            m_LockedPayloads = new UnsafeParallelHashMap<PayloadHandle, PayloadBufferLockData>(InitialBufferLockMapCapacity, Allocator.Persistent);
+            m_LockedPayloads = new PayloadLockHashMap(InitialBufferLockMapCapacity, Allocator.Persistent);
             m_PayloadLockSync = new SpinLockReadWrite(Allocator.Persistent);
             m_PayloadReleaseDeferredListLockSync = new SpinLockExclusive(Allocator.Persistent);
 
 #if LOGGING_MEM_DEBUG
-            m_AllocatedPayloads = new UnsafeHashSet<PayloadHandle>(512, Allocator.Persistent);
+            m_AllocatedPayloads = new UnsafeParallelHashSet<PayloadHandle>(512, Allocator.Persistent);
 #endif
 
             m_BufferParams = parameters;
@@ -450,7 +452,7 @@ namespace Unity.Logging
                 result.Append(name);
                 result.Append((FixedString32Bytes)" state: \n");
 
-#if ENABLE_UNITY_COLLECTIONS_CHECKS
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
                 result.Append((FixedString32Bytes)"  Update Count: ");
                 result.Append(m_UpdateCounter);
                 result.Append('\n');
@@ -574,7 +576,7 @@ namespace Unity.Logging
             if (!IsInitialized)
                 return;
 
-#if ENABLE_UNITY_COLLECTIONS_CHECKS
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
             Interlocked.Increment(ref m_UpdateCounter);
 #endif
 
@@ -642,7 +644,7 @@ namespace Unity.Logging
         /// Allocates a new Payload buffer from the default Payload container.
         /// </summary>
         /// <remarks>
-        /// See <see cref="LogMemoryManager.AllocatePayloadBuffer(int, out NativeArray{byte})"/>.
+        /// See <see cref="LogMemoryManager.AllocatePayloadBuffer"/>.
         /// </remarks>
         /// <param name="payloadSize">Number of bytes to allocate; must fall within the range of <see cref="UnsafePayloadRingBuffer.MinimumPayloadSize"/> and <see cref="UnsafePayloadRingBuffer.MaximumPayloadSize"/>.</param>
         /// <returns>A valid <see cref="PayloadHandle"/> if successful.</returns>
@@ -716,7 +718,7 @@ namespace Unity.Logging
         /// - Do not use a given Payload allocation in multiple Disjointed buffers
         /// - Do not use a Disjointed head handle within another Disjointed buffer (unsupported scenario)
         ///
-        /// NOTE: These rules are not generally not checked nor enforced, and any validation that is performed only occurs when ENABLE_UNITY_COLLECTIONS_CHECKS is enabled.
+        /// NOTE: These rules are not generally not checked nor enforced, and any validation that is performed only occurs when ENABLE_UNITY_COLLECTIONS_CHECKS or UNITY_DOTS_DEBUG is enabled.
         /// </remarks>
         /// <param name="payloadSizes">Set of buffer sizes to allocate for each Payload that comprises the DisjointedBuffer.</param>
         /// <param name="payloadHandles">Optional list that receives the <see cref="PayloadHandle"/> values for each Payload allocated by this method.</param>
@@ -730,7 +732,7 @@ namespace Unity.Logging
         /// Allocates a new Disjointed buffer, which includes allocating the individual Payloads that make up the entire buffer.
         /// </summary>
         /// <remarks>
-        /// See <see cref="LogMemoryManager.AllocateDisjointedBuffer(ref FixedList64Bytes{ushort}, ref NativeList{PayloadHandle})"/>.
+        /// See <see cref="LogMemoryManager.AllocateDisjointedBuffer"/>.
         /// </remarks>
         /// <param name="payloadSizes">Set of buffer sizes to allocate for each Payload that comprises the DisjointedBuffer.</param>
         /// <param name="payloadHandles">Optional list that receives the <see cref="PayloadHandle"/> values for each Payload allocated by this method.</param>
@@ -744,7 +746,7 @@ namespace Unity.Logging
         /// Allocates a new Disjointed buffer, which includes allocating the individual Payloads that make up the entire buffer.
         /// </summary>
         /// <remarks>
-        /// See <see cref="LogMemoryManager.AllocateDisjointedBuffer(ref FixedList64Bytes{ushort}, ref NativeList{PayloadHandle})"/>.
+        /// See <see cref="LogMemoryManager.AllocateDisjointedBuffer"/>.
         /// </remarks>
         /// <param name="payloadSizes">Set of buffer sizes to allocate for each Payload that comprises the DisjointedBuffer.</param>
         /// <param name="payloadHandles">Optional list that receives the <see cref="PayloadHandle"/> values for each Payload allocated by this method.</param>
@@ -758,12 +760,12 @@ namespace Unity.Logging
         /// Creates a new Disjointed buffer that's composed of preallocated Payloads, instead of allocating new ones.
         /// </summary>
         /// <remarks>
-        /// See <see cref="AllocateDisjointedBuffer(ref FixedList64Bytes{ushort}, ref NativeList{PayloadHandle})"/> for a general
+        /// See <see cref="AllocateDisjointedBuffer"/> for a general
         /// overview on "Disjointed" payload buffers.
         ///
         /// Use this method to group a set of Payload buffers that have already been allocated into a single Disjointed buffer.
         /// In this case, only the "head" payload needs to be allocated, which is then filled with the specified <see cref="PayloadHandle>"/>
-        /// value. A handle to the new head buffer is returned just as with <see cref="AllocateDisjointedBuffer(ref FixedList64Bytes{ushort}, ref NativeList{PayloadHandle})"/>.
+        /// value. A handle to the new head buffer is returned just as with <see cref="AllocateDisjointedBuffer"/>.
         ///
         /// Disjointed buffers created this way should be treated exactly the same as those allocated up front; the individual Payloads
         /// are now part of the whole buffer and should only be used for immediate reading/writing of data. Likewise, calling
@@ -771,7 +773,7 @@ namespace Unity.Logging
         /// automatically release all the individual Payload buffers as well.
         ///
         /// NOTE: The <see cref="PayloadHandle"/> values passed into this method must reference valid Payload buffers and cannot
-        /// be themselves handles to Disjointed buffers. However, the handles are only validated when ENABLE_UNITY_COLLECTIONS_CHECKS
+        /// be themselves handles to Disjointed buffers. However, the handles are only validated when ENABLE_UNITY_COLLECTIONS_CHECKS or UNITY_DOTS_DEBUG
         /// are enabled.
         /// </remarks>
         /// <param name="payloadHandles">Set a <see cref="PayloadHandle"/> values referencing Payload buffers that'll compose the new Disjointed buffer.</param>
@@ -968,7 +970,7 @@ namespace Unity.Logging
             }
         }
 
-        [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS")]
+        [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS"), Conditional("UNITY_DOTS_DEBUG")] // ENABLE_UNITY_COLLECTIONS_CHECKS or UNITY_DOTS_DEBUG
         private static void CheckReleaseWasSuccessful(PayloadReleaseResult result)
         {
             if (result != PayloadReleaseResult.Success)
@@ -1051,7 +1053,7 @@ namespace Unity.Logging
         /// Retrieves a NativeArray to safely access an individual Payload that's part of a Disjointed buffer.
         /// </summary>
         /// <remarks>
-        /// See <see cref="AllocateDisjointedBuffer(ref FixedList64Bytes{ushort}, ref NativeList{PayloadHandle})"/> for a general
+        /// See <see cref="AllocateDisjointedBuffer"/> for a general
         /// overview on "Disjointed" payload buffers.
         ///
         /// Use this method to safely retrieve one of the Payload buffers, that's referenced by a Disjointed buffer, for
@@ -1059,7 +1061,7 @@ namespace Unity.Logging
         ///
         /// The Payload buffer to retrieve is specified by an index of the <see cref="PayloadHandle"/> value within the head buffer.
         /// This index value corresponds to the list index used to create the Disjointed buffer. That is, the Payload size list passed into
-        /// <see cref="AllocateDisjointedBuffer(ref FixedList64Bytes{ushort}, ref NativeList{PayloadHandle})"/> or the <see cref="PayloadHandle"/>
+        /// <see cref="AllocateDisjointedBuffer"/> or the <see cref="PayloadHandle"/>
         /// value list passed into <see cref="CreateDisjointedPayloadBufferFromExistingPayloads(ref FixedList512Bytes{PayloadHandle})"/>.
         ///
         /// As with <see cref="RetrievePayloadBuffer(PayloadHandle, bool, out NativeArray{byte})"/>, the returned NativeArray is a "view"
@@ -1349,17 +1351,17 @@ namespace Unity.Logging
 
         private SpinLockReadWrite           m_UpdateLock;
 
-        private UnsafeParallelHashMap<PayloadHandle, PayloadBufferLockData> m_LockedPayloads;
+        private PayloadLockHashMap          m_LockedPayloads;
         private SpinLockReadWrite           m_PayloadLockSync;
         private SpinLockExclusive           m_PayloadReleaseDeferredListLockSync;
         private uint                        m_OverflowResizeFence;
 
-#if ENABLE_UNITY_COLLECTIONS_CHECKS
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
         private long                        m_UpdateCounter;
 #endif
 
 #if LOGGING_MEM_DEBUG
-        private UnsafeHashSet<PayloadHandle> m_AllocatedPayloads;
+        private UnsafeParallelHashSet<PayloadHandle> m_AllocatedPayloads;
 #endif
 
         private volatile int m_ResizingBlittable;
@@ -1522,7 +1524,7 @@ namespace Unity.Logging
         /// <returns>New copied <see cref="PayloadHandle"/> in this <see cref="LogMemoryManager"/></returns>
         internal PayloadHandle Copy(PayloadHandle handle)
         {
-#if ENABLE_UNITY_COLLECTIONS_CHECKS
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
             Assert.IsTrue(IsPayloadHandleValid(handle));
 #endif
             var success = RetrievePayloadBuffer(handle, false, out var src);
@@ -1548,7 +1550,7 @@ namespace Unity.Logging
         /// <returns>New copied <see cref="PayloadHandle"/> in <see cref="destMemoryManager"/> <see cref="LogMemoryManager"/></returns>
         internal PayloadHandle Copy(ref LogMemoryManager destMemoryManager, PayloadHandle handle)
         {
-#if ENABLE_UNITY_COLLECTIONS_CHECKS
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
             Assert.IsTrue(IsPayloadHandleValid(handle));
 #endif
 
@@ -1569,7 +1571,7 @@ namespace Unity.Logging
         private unsafe PayloadHandle AllocateDisjointedPayloadBufferInternal<T>(ref T payloadSizes, ref NativeList<PayloadHandle> payloadHandles)
             where T : struct, INativeList<ushort>
         {
-#if ENABLE_UNITY_COLLECTIONS_CHECKS
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
             // Validate the number of payload handles will fit into the "head" buffer
             if (payloadHandles.IsCreated)
                 CheckForMaxDisjointedPayloadCount(payloadHandles.Length);
@@ -1654,7 +1656,7 @@ namespace Unity.Logging
             if (n == 0)
                 return new PayloadHandle();
 
-#if ENABLE_UNITY_COLLECTIONS_CHECKS
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
             // Check for errors or unsupported scenarios when creating Disjointed Buffer
             // - Payload handle is invalid or doesn't reference valid payload buffer
             // - Payload handle itself references a DisjointedBuffer; don't support "chaining" DisjointedBuffers together
@@ -1777,10 +1779,10 @@ namespace Unity.Logging
             return success;
         }
 
-        [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS")]
+        [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS"), Conditional("UNITY_DOTS_DEBUG")] // ENABLE_UNITY_COLLECTIONS_CHECKS or UNITY_DOTS_DEBUG
         private void CheckForMaxDisjointedPayloadCount(int numPayloads)
         {
-#if ENABLE_UNITY_COLLECTIONS_CHECKS
+#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
             var maxNumPayloads = UnsafePayloadRingBuffer.MaximumDisjointedPayloadCount;
             if (numPayloads > maxNumPayloads)
                 throw new ArgumentOutOfRangeException($"Number of Disjointed payload buffers {numPayloads} exceeds maximum allowed of {maxNumPayloads}\n" +
@@ -1923,6 +1925,14 @@ namespace Unity.Logging
                 message.Append(" [Disjointed]");
             message.Append('\n');
             UnityEngine.Debug.Log(message);
+        }
+
+        public static ref LogMemoryManager FromPointer(IntPtr memoryManager)
+        {
+            unsafe
+            {
+                return ref UnsafeUtility.AsRef<LogMemoryManager>(memoryManager.ToPointer());
+            }
         }
     }
 }

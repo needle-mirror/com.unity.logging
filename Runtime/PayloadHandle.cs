@@ -24,7 +24,7 @@ namespace Unity.Logging
     /// </remarks>
     [BurstCompile]
     [StructLayout(LayoutKind.Sequential)]
-    public struct PayloadHandle : IEquatable<PayloadHandle>
+    public readonly struct PayloadHandle : IEquatable<PayloadHandle>
     {
         internal readonly ulong m_Value;
 

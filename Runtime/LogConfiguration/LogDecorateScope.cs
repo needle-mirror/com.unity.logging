@@ -26,17 +26,9 @@ namespace Unity.Logging
     /// The way it works internally is:
     ///
     /// <code>
-    /// ref var logController = ref ctx.Lock.GetLogController();
-    /// ref var data = ref LogController.BeginEditDecoratePayloadHandles(ref logController, out var nBefore);
+    /// ref var dec = ref LogController.BeginEditDecoratePayloadHandles(ref ctx.Lock, out var nBefore);
     ///
-    /// unsafe
-    /// {
-    ///     fixed (FixedList4096Bytes{PayloadHandle}* ptr = data)
-    ///     {
-    ///         var dec = LogContextWithDecorator.From4096(ptr, scopedLock);
-    ///         -- Adds decoration to(ref dec); --
-    ///     }
-    /// }
+    ///   -- Adds decoration to(ref dec); --
     ///
     /// var payloadHandles = LogController.EndEditDecoratePayloadHandles(ref logController, nBefore);
     ///

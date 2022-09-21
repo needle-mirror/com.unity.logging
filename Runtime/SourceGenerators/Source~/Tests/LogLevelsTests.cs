@@ -29,7 +29,7 @@ class ClassA
 
     public void A()
     {
-        Unity.Logging.Log.Info(""Hello FixedString64BytesFixedString64Bytes {0}!"", new Data()); // same call signature as the previous one
+        Unity.Logging.Log.Info(""Hello FixedString64BytesFixedString64Bytes {0}!"", new Data());
         Unity.Logging.Log.Warning(""Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nam et. {0}!"", new Data());
         Unity.Logging.Log.Info(""Hello #2 {0}!"", new Data()); // same call signature as the previous one
 
@@ -57,10 +57,35 @@ Donec volutpat fermentum augue, sit amet eleifend lectus commodo at quam.
             var generator = CommonUtils.GenerateCode(testData);
 
             Assert.AreEqual(3, generator.invokeData.InvokeInstances.Count);
-            Assert.AreEqual("FixedString64Bytes", generator.invokeData.InvokeInstances[LogCallKind.Info][0].MessageData.MessageType);
-            Assert.AreEqual("FixedString4096Bytes", generator.invokeData.InvokeInstances[LogCallKind.Info][1].MessageData.MessageType);
-            Assert.AreEqual("FixedString128Bytes", generator.invokeData.InvokeInstances[LogCallKind.Warning][0].MessageData.MessageType);
-            Assert.AreEqual("FixedString32Bytes", generator.invokeData.InvokeInstances[LogCallKind.Fatal][0].MessageData.MessageType);
+
+            {
+                var infos = generator.invokeData.InvokeInstances[LogCallKind.Info];
+
+                // string, data
+                // string, data, data
+                Assert.AreEqual(2, infos.Count);
+
+                Assert.AreEqual(2, infos.Count(m => m.MessageData.MessageType == "string"));
+            }
+
+            {
+                var warns = generator.invokeData.InvokeInstances[LogCallKind.Warning];
+
+                // string, data
+                Assert.AreEqual(1, warns.Count);
+
+                Assert.AreEqual(1, warns.Count(m => m.MessageData.MessageType == "string"));
+            }
+
+            {
+                var fatals = generator.invokeData.InvokeInstances[LogCallKind.Fatal];
+
+                // string
+                Assert.AreEqual(1, fatals.Count);
+
+                Assert.AreEqual(1, fatals.Count(m => m.MessageData.MessageType == "string"));
+            }
+
             Assert.IsTrue(generator.invokeData.IsValid);
 
 
@@ -299,21 +324,27 @@ class ClassA
             var decor = generator.invokeData.InvokeInstances[LogCallKind.Decorate];
             var infoCall = generator.invokeData.InvokeInstances[LogCallKind.Info];
 
-
             Assert.IsTrue(generator.invokeData.IsValid);
             Assert.AreEqual(2, generator.invokeData.InvokeInstances.Count);
             Assert.AreEqual(2, decor.Count);
+            Assert.AreEqual(1, infoCall.Count);
 
             var dec1 = decor[0];
+
             var dec2 = decor[1];
 
-            Assert.AreEqual("FixedString64Bytes", dec1.MessageData.MessageType);
-            Assert.AreEqual("FixedString64Bytes", dec2.MessageData.MessageType);
+            Assert.AreEqual("string", dec1.MessageData.MessageType);
+
+            Assert.AreEqual("string", dec2.MessageData.MessageType);
+
             Assert.AreEqual(1, dec1.ArgumentData.Count);
-            Assert.AreEqual(1, dec2.ArgumentData.Count);
 
             Assert.AreEqual("Int32", dec1.ArgumentData[0].ArgumentTypeName);
             Assert.AreEqual("Data", dec2.ArgumentData[0].ArgumentTypeName);
+
+            Assert.AreEqual("string", infoCall[0].MessageData.MessageType);
+
+            Assert.AreEqual("Data", infoCall[0].ArgumentData[0].ArgumentTypeName);
         }
 
         [Test]
@@ -324,18 +355,32 @@ class ClassA
 {
     public static void DecoratorThatIsCalledForJob(in LogContextWithDecorator d)
     {
-        Unity.Logging.Log.To(d).Decorate(""Job"", ""FromJobOnly"");
-        Unity.Logging.Log.Info(""Job"", ""FromJobOnly"");
+        Unity.Logging.Log.To(d).Decorate(""Job"", ""FromJobOnl3213123123124125412512412431231231241241243124yFromJobOnl3213123123124125412512412431231231241241243124y"");
+        Unity.Logging.Log.Info(""Job {0}"", ""FromJobOnly"");
     }
 }
 ";
             var generator = CommonUtils.GenerateCode(testData);
 
-            var decor = generator.invokeData.InvokeInstances[LogCallKind.Decorate];
-            var info = generator.invokeData.InvokeInstances[LogCallKind.Info];
+            {
+                var decor = generator.invokeData.InvokeInstances[LogCallKind.Decorate];
 
-            Assert.IsTrue(decor[0].IsBurstable);
-            Assert.IsFalse(generator.methodsGenCode.ToString().Contains("System.String"));
+                Assert.AreEqual(1, decor.Count);
+                Assert.AreEqual(1, decor.Count(d => d.MessageData.MessageType == "string"));
+
+                Assert.AreEqual(1, decor.First(d => d.MessageData.MessageType == "string").ArgumentData.Count);
+                Assert.AreEqual("string", decor.First(d => d.MessageData.MessageType == "string").ArgumentData[0].ArgumentTypeName);
+            }
+
+            {
+                var info = generator.invokeData.InvokeInstances[LogCallKind.Info];
+
+                Assert.AreEqual(1, info.Count);
+                Assert.AreEqual(1, info.Count(d => d.MessageData.MessageType == "string"));
+
+                Assert.AreEqual(1, info.First(d => d.MessageData.MessageType == "string").ArgumentData.Count);
+                Assert.AreEqual("string", info.First(d => d.MessageData.MessageType == "string").ArgumentData[0].ArgumentTypeName);
+            }
         }
     }
 }

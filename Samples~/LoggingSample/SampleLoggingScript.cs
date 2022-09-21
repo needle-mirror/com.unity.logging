@@ -17,7 +17,7 @@ namespace Samples
                 .MinimumLevel.Debug()
                 .OutputTemplate("{Timestamp} - {Level} - {Message}")
                 .WriteTo.File("LogName.log", minLevel: LogLevel.Verbose)
-                .WriteTo.Console(outputTemplate: "{Level} || {Timestamp} || {Message}"));
+                .WriteTo.StdOut(outputTemplate: "{Level} || {Timestamp} || {Message}"));
 
 
             SelfLog.SetMode(SelfLog.Mode.EnabledInUnityEngineDebugLogError);
@@ -34,12 +34,6 @@ namespace Samples
         {
             // This will log every frame.
             Log.Info("Hello World!");
-        }
-
-        void LateUpdate()
-        {
-            // This must be called every frame
-            Unity.Logging.Internal.LoggerManager.ScheduleUpdateLoggers();
         }
     }
 }

@@ -11,14 +11,15 @@ namespace SourceGenerator.Logging
 
         public bool IsValid => MessageData.IsValid && ArgumentData != null;
 
-        public bool IsBurstable { get; }
+        // NOTE: UnsafeText / NativeText shouldn't use PayloadHandle for messages, since BuildMessage can handle them, like FixedString
+        public bool ShouldUsePayloadHandleForMessage => MessageData.ShouldUsePayloadHandle;
+        public bool HasLiteralStringMessage => MessageData.IsLiteral;
+        public bool HasLiteralStrings => HasLiteralStringMessage || ArgumentData.Any(a => a.IsLiteral);
 
         public LogCallData(in LogCallMessageData msgData, IEnumerable<LogCallArgumentData> argData)
         {
             MessageData = msgData;
             ArgumentData = new List<LogCallArgumentData>(argData);
-
-            IsBurstable = MessageData.IsBurstable && ArgumentData.All(arg => arg.IsBurstable);
         }
 
         public bool Equals(LogCallData other)
@@ -28,9 +29,16 @@ namespace SourceGenerator.Logging
 
         public override string ToString()
         {
+            if (MessageData.Omitted)
+            {
+                if (ArgumentData.Count > 0)
+                    return $"message omitted as {MessageData.LiteralValue}, ({string.Join(", ", ArgumentData.Select(a => a.ArgumentTypeName + " arg"))})";
+                return $"Message was omitted, without arguments. Please report a bug";
+            }
+
             if (ArgumentData.Count > 0)
-                return $"{MessageData.ToString()} | {string.Join(", ", ArgumentData.Select(a => a.ToString()))}\n\t\tCall is {(IsBurstable ? "burstable" : "not compatible with Burst")}";
-            return MessageData.ToString();
+                return $"({MessageData.MessageType} msg, {string.Join(", ", ArgumentData.Select(a => a.ArgumentTypeName + " arg"))})";
+            return $"({MessageData.MessageType} msg)";
         }
     }
 }

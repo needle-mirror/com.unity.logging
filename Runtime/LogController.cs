@@ -1,12 +1,20 @@
+#if UNITY_DOTSRUNTIME || UNITY_2021_2_OR_NEWER
+#define LOGGING_USE_UNMANAGED_DELEGATES // C# 9 support, unmanaged delegates - gc alloc free way to call
+#endif
+
 using System;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Threading;
 using UnityEngine.Assertions;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
+using Unity.Jobs.LowLevel.Unsafe;
 using Unity.Logging.Internal;
+using Unity.Logging.Sinks;
 
 namespace Unity.Logging
 {
@@ -38,6 +46,9 @@ namespace Unity.Logging
 
         internal byte NeedsStackTraceByte;
 
+        private SpinLockReadWrite SinksLock;
+        private UnsafeList<SinkStruct> Sinks;
+
         /// <summary>
         /// True if any sink requested stack trace. If this is false - logging would work faster.
         /// </summary>
@@ -47,6 +58,7 @@ namespace Unity.Logging
 
         // Constant decoration
         private ThreadSafeList4096<PayloadHandle> DecoratePayloadHandles;
+        public SyncMode SyncMode;
 
         /// <summary>
         /// Function that is called by the logging codegeneration. <para />
@@ -54,14 +66,25 @@ namespace Unity.Logging
         /// This function is called before decoration, <see cref="EndEditDecoratePayloadHandles"/> must be called after
         /// <seealso cref="LogDecorateScope"/>
         /// </summary>
-        /// <param name="lc"><see cref="LogController"/> to add decorations to</param>
+        /// <param name="lock"><see cref="LogControllerScopedLock"/> that controls LogController</param>
         /// <param name="nBefore">Current count of Decorations - PayloadHandles at the moment</param>
-        /// <returns>Array of Decorations - PayloadHandles</returns>
-        public static ref FixedList4096Bytes<PayloadHandle> BeginEditDecoratePayloadHandles(ref LogController lc, out int nBefore)
+        /// <returns><see cref="LogContextWithDecorator"/> that controls array of Decorations - PayloadHandles</returns>
+        public static LogContextWithDecorator BeginEditDecoratePayloadHandles(in LogControllerScopedLock @lock, out int nBefore)
         {
+            ref var lc = ref @lock.GetLogController();
+
             nBefore = lc.DecoratePayloadHandles.BeginWrite();
-            return ref ThreadSafeList4096<PayloadHandle>.GetReferenceNotThreadSafe(ref lc.DecoratePayloadHandles);
+            ref var list = ref ThreadSafeList4096<PayloadHandle>.GetReferenceNotThreadSafe(ref lc.DecoratePayloadHandles);
+
+            unsafe
+            {
+                fixed (FixedList4096Bytes<PayloadHandle>* ptr = &list)
+                {
+                    return new LogContextWithDecorator(ptr, @lock);
+                }
+            }
         }
+
 
         /// <summary>
         /// Function that is called by the logging codegeneration. <para />
@@ -102,6 +125,10 @@ namespace Unity.Logging
             DispatchQueue = new DispatchQueue(memoryParameters.DispatchQueueSize);
             HasSink = default;
             NeedsStackTraceByte = 0;
+            SyncMode = SyncMode.FatalIsSync;
+
+            Sinks = new UnsafeList<SinkStruct>(8, Allocator.Persistent);
+            SinksLock = new SpinLockReadWrite(Allocator.Persistent);
 
             OutputWriterDecorateHandlers = new ThreadSafeFuncList<LoggerManager.OutputWriterDecorateHandler>();
             DecoratePayloadHandles = new ThreadSafeList4096<PayloadHandle>();
@@ -113,10 +140,10 @@ namespace Unity.Logging
         }
 
         /// <summary>
-        /// Returns true if <see cref="level"/> is supported by at least one <see cref="SinkSystemBase{TLoggerImpl}"/> in this <see cref="LogController"/>
+        /// Returns true if the LogLevel is supported by at least one <see cref="SinkSystemBase"/> in this <see cref="LogController"/>
         /// </summary>
         /// <param name="level">LogLevel enum</param>
-        /// <returns>Returns true if <see cref="level"/> is supported by at least one <see cref="SinkSystemBase{TLoggerImpl}"/> in this <see cref="LogController"/></returns>
+        /// <returns>Returns true if the LogLevel is supported by at least one <see cref="SinkSystemBase"/> in this <see cref="LogController"/></returns>
         public bool HasSinksFor(LogLevel level) => HasSink.Has(level);
 
         /// <summary>
@@ -128,7 +155,7 @@ namespace Unity.Logging
         /// Checks that IsCreated == true. Throws otherwise.
         /// </summary>
         /// <exception cref="Exception">Throws if IsCreated == false</exception>
-        [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS")]
+        [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS"), Conditional("UNITY_DOTS_DEBUG")] // ENABLE_UNITY_COLLECTIONS_CHECKS or UNITY_DOTS_DEBUG
         public void MustBeValid()
         {
             if (IsCreated == false)
@@ -147,6 +174,20 @@ namespace Unity.Logging
         /// </remarks>
         public void Shutdown()
         {
+            if (SinksLock.IsCreated)
+            {
+                using (var _ = new SpinLockReadWrite.ScopedExclusiveLock(SinksLock))
+                {
+                    if (Sinks.IsCreated)
+                    {
+                        foreach (var sinkStruct in Sinks)
+                            sinkStruct.Dispose();
+                        Sinks.Dispose();
+                    }
+                }
+                SinksLock.Dispose();
+            }
+
             if (DispatchQueue.IsCreated)
                 DispatchQueue.Dispose();
             if (MemoryManager.IsInitialized)
@@ -161,10 +202,16 @@ namespace Unity.Logging
         /// If successful, the Logging system will take over ownership of the message data and ensure the memory buffer is released
         /// after the message has been processed.
         /// </remarks>
-        /// <param name="message">Message structure</param>
-        public void DispatchMessage(ref LogMessage message)
+        /// <param name="payload">PayloadHandle of the binary data associated with the message</param>
+        /// <param name="stacktraceId">Id of the stacktrace connected to the LogMessage, 0 is none</param>
+        /// <param name="logLevel">LogLevel of the LogMessage</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void DispatchMessage(PayloadHandle payload, long stacktraceId, LogLevel logLevel)
         {
-            DispatchQueue.Enqueue(ref message);
+            DispatchQueue.Enqueue(payload, stacktraceId, logLevel);
+
+            if (SyncMode == SyncMode.FullSync || (SyncMode == SyncMode.FatalIsSync && logLevel == LogLevel.Fatal))
+                 FlushSync();
         }
 
         /// <summary>
@@ -176,6 +223,170 @@ namespace Unity.Logging
             if (IsCreated == false)
                 return 0;
             return DispatchQueue.TotalLength;
+        }
+
+        /// <summary>
+        /// Burst-friendly way to immediately and synchronously Update/Flush the DispatchQueue into sinks. This is a slower alternative to LoggerManager.ScheduleUpdate but can be called from Burst / not main thread.
+        /// </summary>
+        [BurstCompile]
+        public void FlushSync()
+        {
+            Handle.MustBeValid();
+            LogControllerWrapper.MustBeReadLocked(Handle);
+
+            var allocator = JobsUtility.IsExecutingJob ? Allocator.Temp : Allocator.TempJob;  // Allocator.Temp can be used in case of main thread / jobs. But this code can be in a managed thread
+
+            var messageBuffer = new UnsafeText(1024, allocator);
+
+            try
+            {
+                var sinks = BeginUsingSinks();
+                for (var si = 0; si < sinks; si++)
+                {
+                    ref var logger = ref GetSinkLogger(si);
+                    if (logger.OnBeforeSink.IsCreated)
+                        logger.OnBeforeSink.Invoke(logger.UserData);
+                }
+
+                try
+                {
+                    DispatchQueue.LockAndSortForSyncAccess(out var olderMessages, out var newerMessages);
+                    ProcessLogElements(ref olderMessages, ref messageBuffer, sinks, allocator);
+                    ProcessLogElements(ref newerMessages, ref messageBuffer, sinks, allocator);
+                }
+                finally
+                {
+                    DispatchQueue.EndLockAfterSyncAccess();
+                }
+
+                for (var si = 0; si < sinks; si++)
+                {
+                    ref var logger = ref GetSinkLogger(si);
+                    if (logger.OnAfterSink.IsCreated)
+                        logger.OnAfterSink.Invoke(logger.UserData);
+                }
+            }
+            finally
+            {
+                EndUsingSinks();
+            }
+
+            messageBuffer.Dispose();
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal int BeginUsingSinks()
+        {
+            SinksLock.LockRead();
+
+            return Sinks.Length;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void EndUsingSinks()
+        {
+            SinksLock.UnlockRead();
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void ProcessLogElements(ref UnsafeList<LogMessage> list, ref UnsafeText messageBuffer, int sinks, Allocator allocator)
+        {
+            unsafe
+            {
+                fixed (LogMemoryManager* memManagerPtr = &MemoryManager)
+                {
+                    var memManager = new IntPtr(memManagerPtr);
+
+                    var n = list.Length;
+                    for (var position = 0; position < n; ++position)
+                    {
+                        ref var elem = ref list.ElementAt(position);
+
+                        for (var si = 0; si < sinks; si++)
+                        {
+                            ref var sink = ref GetSinkLogger(si);
+
+                            if (sink.IsInterestedIn(ref elem))
+                            {
+                                sink.Process(ref elem, ref sink.Formatter, ref messageBuffer, memManager, allocator);
+                            }
+                        }
+
+                        Logger.CleanupUpdateJob.ReleaseLogMessage(ref MemoryManager, ref elem);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Burst-friendly way to represent a sink
+        /// </summary>
+        public struct SinkStruct : IDisposable
+        {
+            public FixedString512Bytes OutputTemplate;
+            public LogLevel MinimalLevel;
+            public int CaptureStackTracesBytes;
+            public long LastTimestamp;
+            public IntPtr UserData;
+
+            public FormatterStruct Formatter;
+
+            public OnBeforeSinkDelegate OnBeforeSink;
+            public OnLogMessageEmitDelegate OnLogMessageEmit;
+            public OnAfterSinkDelegate OnAfterSink;
+            public OnDisposeDelegate OnDispose;
+
+            public bool CaptureStackTraces => CaptureStackTracesBytes != 0;
+            public bool IsCreated => OnLogMessageEmit.IsCreated;
+
+            public IntPtr GetUserData() => UserData;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public bool IsInterestedIn(ref LogMessage elem)
+            {
+                if (LastTimestamp >= elem.Timestamp)
+                    return false;
+                // Timestamp is tracked to make sure we never process the same logging message in this sink twice
+                // This actually can happen in case of Fatal is sync, everything else is async
+                Interlocked.Exchange(ref LastTimestamp, elem.Timestamp);
+                return elem.Level >= MinimalLevel;
+            }
+
+            public void Dispose()
+            {
+                if (OnDispose.IsCreated)
+                    OnDispose.Invoke(UserData);
+                UserData = IntPtr.Zero;
+            }
+
+            /// <summary>
+            /// Processes the LogMessage.
+            /// </summary>
+            /// <param name="elem">Log message to process</param>
+            /// <param name="formatter">Formatter</param>
+            /// <param name="messageBuffer">Message buffer that is used as a temporary storage</param>
+            /// <param name="memManager">Memory manager where LogMessage's data is stored</param>
+            /// <param name="allocator">Allocator to use in case of temporary allocation needed during the processing</param>
+            public void Process(ref LogMessage elem, ref FormatterStruct formatter, ref UnsafeText messageBuffer, IntPtr memManager, Allocator allocator)
+            {
+                if (Formatter.OnFormatMessage.IsCreated)
+                {
+                    var length = Formatter.OnFormatMessage.Invoke(in elem, ref formatter, ref OutputTemplate, ref messageBuffer, memManager, UserData, allocator);
+                    if (length > 0)
+                    {
+                        OnLogMessageEmit.Invoke(in elem, ref OutputTemplate, ref messageBuffer, memManager, UserData, allocator);
+                    }
+                }
+                else
+                {
+                    OnLogMessageEmit.Invoke(in elem, ref OutputTemplate, ref messageBuffer, memManager, UserData, allocator);
+                }
+            }
+        }
+
+        internal ref SinkStruct GetSinkLogger(int si)
+        {
+            return ref Sinks.ElementAt(si);
         }
 
         /// <summary>
@@ -225,18 +436,26 @@ namespace Unity.Logging
         /// </summary>
         /// <param name="handles">Where to add decorations</param>
         /// <returns>Count of added decorations</returns>
-        internal ushort ExecuteDecorateHandlers(LogContextWithDecorator handles)
+        internal ushort ExecuteDecorateHandlers(ref LogContextWithDecorator handles)
         {
             Handle.MustBeValid();
 
             var lengthBefore = handles.Length;
 
-            var n = OutputWriterDecorateHandlers.BeginRead();
             try
             {
-                for (var i = 0; i < n; i++)
+                unsafe
                 {
-                    OutputWriterDecorateHandlers.ElementAt(i).Invoke(handles);
+                    var n = OutputWriterDecorateHandlers.BeginRead();
+                    for (var i = 0; i < n; i++)
+                    {
+                        ref var func = ref OutputWriterDecorateHandlers.ElementAt(i);
+#if LOGGING_USE_UNMANAGED_DELEGATES
+                        ((delegate * unmanaged[Cdecl] <ref LogContextWithDecorator, void>)func.Value)(ref handles);
+#else
+                        func.Invoke(ref handles);
+#endif
+                    }
                 }
             }
             finally
@@ -287,6 +506,50 @@ namespace Unity.Logging
             finally
             {
                 DecoratePayloadHandles.EndWrite();
+            }
+        }
+
+        public void AddSinkStruct(SinkSystemBase sink)
+        {
+            try
+            {
+                SinksLock.Lock();
+                var s = sink.ToSinkStruct();
+
+                if (s.IsCreated)
+                {
+                    sink.SinkId = Sinks.Length;
+                    Assert.IsTrue(s.OnLogMessageEmit.IsCreated, "OnLogMessageEmit must be assigned");
+                    Sinks.Add(s);
+                }
+                else
+                {
+                    sink.SinkId = -1;
+                }
+            }
+            finally
+            {
+                SinksLock.Unlock();
+            }
+        }
+
+        /// <summary>
+        /// Changes the minimal level of the sink
+        /// </summary>
+        /// <param name="sinkId">Id that was returned by <see cref="AddSinkStruct"/></param>
+        /// <param name="minimalLevel">New minimal log level for the sink</param>
+        public void SetMinimalLogLevelForSink(int sinkId, LogLevel minimalLevel)
+        {
+            if (sinkId < 0) return;
+
+            try
+            {
+                BeginUsingSinks();
+                Sinks.ElementAt(sinkId).MinimalLevel = minimalLevel;
+            }
+            finally
+            {
+                EndUsingSinks();
             }
         }
     }

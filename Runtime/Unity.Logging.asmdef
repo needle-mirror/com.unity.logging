@@ -28,6 +28,11 @@
             "name": "Unity",
             "expression": "[2020.3.26,2020.3.99]",
             "define": "USE_BASELIB"
+        },
+        {
+            "name": "Unity",
+            "expression": "2022.2.0a15",
+            "define": "UNITY_CONSOLE_API"
         }
     ],
     "noEngineReferences": false
