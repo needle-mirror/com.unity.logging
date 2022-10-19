@@ -67,6 +67,7 @@ namespace Unity.Logging
         /// <param name="formatter">Formatter that should be used to populate output text</param>
         /// <param name="outputUnsafeText">Reference to a UnsafeListString object to which the delegate writes the struct's data.</param>
         /// <param name="mem">Pointer + size of data to parse</param>
+        /// <param name="memAllocator">Memory manager that owns the binary data</param>
         /// <param name="holeInfo">Hole setup, like format specifiers</param>
         /// <returns>Value indicating delegate successfully handled the data or not.</returns>
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -219,6 +220,12 @@ namespace Unity.Logging
             return func.Value;
         }
 
+        /// <summary>
+        /// Used by Log.Decorate calls to add a method that's called for every log message, and add decorations to it globally.
+        /// </summary>
+        /// <param name="handler">Decorate call delegate</param>
+        /// <param name="isBurstable">If true - <c>BurstCompiler.CompileFunctionPointer</c> will be called. Will fallback to false if compilation failed</param>
+        /// <returns>LogDecorateHandlerScope scoped struct</returns>
         public static LogDecorateHandlerScope AddDecorateHandler(LoggerManager.OutputWriterDecorateHandler handler, bool isBurstable = false)
         {
             var func = new FunctionPointer<LoggerManager.OutputWriterDecorateHandler>();
@@ -246,6 +253,13 @@ namespace Unity.Logging
             return new LogDecorateHandlerScope(func);
         }
 
+        /// <summary>
+        /// Used by Log.To().Decorate calls to add a method that's called for every log message, and adds decorations to it for a particular logger.
+        /// </summary>
+        /// <param name="lock">LogControllerScopedLock of logger that adds the decorator</param>
+        /// <param name="handler">Decorate call delegate</param>
+        /// <param name="isBurstable">If true - <c>BurstCompiler.CompileFunctionPointer</c> will be called. Will fallback to false if compilation failed</param>
+        /// <returns>LogDecorateHandlerScope scoped struct</returns>
         public static LogDecorateHandlerScope AddDecorateHandler(LogControllerScopedLock @lock, LoggerManager.OutputWriterDecorateHandler handler, bool isBurstable = false)
         {
             FunctionPointer<LoggerManager.OutputWriterDecorateHandler> func;
@@ -345,7 +359,13 @@ namespace Unity.Logging
             return true;
         }
 
-        public static bool WriteFormattedLevel(in LogLevel level, ref UnsafeText messageOutput)
+        /// <summary>
+        /// Appends string representation of <see cref="LogLevel"/> into <see cref="UnsafeText"/>
+        /// </summary>
+        /// <param name="level">Level to append</param>
+        /// <param name="messageOutput">Where to append</param>
+        /// <returns>True on success</returns>
+        public static bool WriteFormattedLevel(LogLevel level, ref UnsafeText messageOutput)
         {
             if (s_OutputWriterLevelHandler.Data.IsCreated)
             {
@@ -364,6 +384,16 @@ namespace Unity.Logging
             return true;
         }
 
+        /// <summary>
+        /// Appends string representation of a binary data in the payload
+        /// </summary>
+        /// <param name="formatter">Current formatter</param>
+        /// <param name="payload">PayloadHandle that points to the binary data</param>
+        /// <param name="messageOutput">UnsafeText where to append</param>
+        /// <param name="errorMessage">Returns an error message string, should a problem parsing the message occur.</param>
+        /// <param name="memAllocator">Memory manager that holds binary representation of the mirror struct</param>
+        /// <param name="currArgSlot">Hole that was used to describe the struct in the log message, for instance <c>{0}</c> or <c>{Number}</c> or <c>{Number:##.0;-##.0}</c></param>
+        /// <returns>True on success</returns>
         public static bool WriteFormattedContextData(ref FormatterStruct formatter, in PayloadHandle payload, ref UnsafeText messageOutput, ref FixedString512Bytes errorMessage, ref LogMemoryManager memAllocator, ref ArgumentInfo currArgSlot)
         {
             if (memAllocator.RetrievePayloadBuffer(payload, out var contextBuffer) == false)
@@ -425,11 +455,22 @@ namespace Unity.Logging
             return result != ContextWriteResult.Failed;
         }
 
+        /// <summary>
+        /// Appends a new line into the <see cref="UnsafeText"/>
+        /// </summary>
+        /// <param name="messageOutput">UnsafeText to append the new line</param>
+        /// <returns>True on success</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool WriteNewLine(ref UnsafeText messageOutput)
         {
             return messageOutput.Append(Builder.EnvNewLine.Data) == FormatError.None;
         }
 
+        /// <summary>
+        /// Appends all properties into the <see cref="UnsafeText"/>. For now not implemented
+        /// </summary>
+        /// <param name="messageOutput">UnsafeText to append the new line</param>
+        /// <returns>True on success</returns>
         public static bool WriteProperties(ref UnsafeText messageOutput)
         {
             // TODO https://jira.unity3d.com/browse/MTT-1807

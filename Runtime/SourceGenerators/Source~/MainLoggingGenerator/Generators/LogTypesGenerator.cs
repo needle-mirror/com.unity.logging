@@ -1,6 +1,7 @@
 using System;
 using System.Text;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -18,7 +19,9 @@ namespace SourceGenerator.Logging
         {
         }
 
-        public static bool Execute(in GeneratorExecutionContext context, ulong assemblyHash, in LogCallsCollection invokeData, out LogStructureTypesData structureData, out StringBuilder generatedTypesCode,
+        public static bool Execute(in ContextWrapper context, ulong assemblyHash, in LogCallsCollection invokeData,
+                                   out LogStructureTypesData structureData,
+                                   out StringBuilder generatedTypesCode,
                                    out StringBuilder generatedParseCode)
         {
             using var _ = new Profiler.Auto("LogTypesGenerator.Execute");
@@ -54,7 +57,7 @@ namespace SourceGenerator.Logging
             return true;
         }
 
-        private bool ExtractLogCallStructureTypesData(GeneratorExecutionContext context, out LogStructureTypesData typesData)
+        private bool ExtractLogCallStructureTypesData(ContextWrapper context, out LogStructureTypesData typesData)
         {
             using var _ = new Profiler.Auto("LogTypesGenerator.ExtractLogCallStructureTypesData");
 
@@ -63,18 +66,51 @@ namespace SourceGenerator.Logging
                 m_CurrentCallKind = level.Key;
                 foreach (var arg in level.Value)
                 {
-                    context.CancellationToken.ThrowIfCancellationRequested();
+                    context.ThrowIfCancellationRequested();
 
-                    ExtractLogCallStructureInstance(context, this, arg.Symbol, arg, out var _);
+                    if (arg.IsUserType) // user defined how to serialize this struct
+                    {
+                        ExtractLogCallStructureInstanceUserDefined(context, this, arg);
+                    }
+                    else
+                    {
+                        ExtractLogCallStructureInstance(context, this, arg.Symbol, arg, out var _);
+                    }
                 }
             }
 
-            typesData = new LogStructureTypesData(m_StructRegistry.Values.ToList());
+            typesData = new LogStructureTypesData(context, m_StructRegistry.Values.ToList());
 
             return typesData.IsValid;
         }
 
-        public static bool ExtractLogCallStructureInstance(GeneratorExecutionContext ctx, LogTypesGenerator gen, in ITypeSymbol structSymbol, LogCallArgumentData argData, out LogStructureDefinitionData structData)
+        static bool ExtractLogCallStructureInstanceUserDefined(ContextWrapper ctx, LogTypesGenerator gen, LogCallArgumentData argData)
+        {
+            using var _ = new Profiler.Auto("LogTypesGenerator.ExtractLogCallStructureInstanceUserDefined");
+
+            // First check if this struct type has already been processed, and if so return existing data
+            string qualifiedName;
+            if (argData.UserDefinedMirrorStruct.IsCreated)
+                qualifiedName = Common.GetFullyQualifiedTypeNameFromSymbol(argData.UserDefinedMirrorStruct.WrapperStructTypeInfo);
+            else
+                qualifiedName = Common.GetFullyQualifiedTypeNameFromSymbol(argData.Symbol);
+
+            if (gen.m_StructRegistry.TryGetValue(qualifiedName, out var structData))
+                return true;
+
+            structData = new LogStructureDefinitionData(gen.m_AssemblyHash, argData.Symbol, gen.m_LocalTypeId++, argData, argData.UserDefinedMirrorStruct);
+
+            // Register this struct type for codegen
+            if (structData.IsValid)
+            {
+                gen.m_StructRegistry.Add(qualifiedName, structData);
+            }
+
+            return structData.IsValid;
+        }
+
+
+        public static bool ExtractLogCallStructureInstance(ContextWrapper ctx, LogTypesGenerator gen, in ITypeSymbol structSymbol, LogCallArgumentData argData, out LogStructureDefinitionData structData)
         {
             using var _ = new Profiler.Auto("LogTypesGenerator.ExtractLogCallStructureInstance");
 
@@ -99,18 +135,12 @@ namespace SourceGenerator.Logging
             // - Type is nested within another struct that is used as an argument AND has at least 1 valid field
             //      That is, if the type is referenced within a logging struct but doesn't have any usable field data (opaque struct)
             //      it'll be skipped.
-            // - Type is tagged with Logging attribute (not yet implemented)
             //
             // Otherwise, we do NOT generate an internal struct
 
             structData = default;
 
-            if (argData.IsConvertibleToString)
-            {
-                return false; // don't add to struct registry
-            }
-
-            if (FixedStringUtils.IsSpecialSerializableType(structSymbol) || structSymbol.SpecialType == SpecialType.System_String)
+            if (argData.DontCreateMirrorStruct(structSymbol))
             {
                 return false; // don't add to struct registry
             }
@@ -120,18 +150,17 @@ namespace SourceGenerator.Logging
             if (gen.m_StructRegistry.TryGetValue(qualifiedName, out structData))
                 return true;
 
-            // If argument data wasn't provided, means we're processing a nested struct which might not be directly used as a argument in log call.
-            // However, if this struct type is used as an argument elsewhere, we must ensure it's the argument data is provided otherwise our generated
-            // struct names won't match those used in the WriteGenerated() parameters.
-
-            if (!argData.IsValid)
+            if (argData.IsValid == false)
             {
+                // If argument data wasn't provided, means we're processing a nested struct which might not be directly used as a argument in log call.
+                // However, if this struct type is used as an argument elsewhere, we must ensure it's the argument data is provided otherwise our generated
+                // struct names won't match those used in the WriteGenerated() parameters.
                 argData = gen.m_UniqueInvokeArgs[gen.m_CurrentCallKind].FirstOrDefault(arg => arg.FullArgumentTypeName.Equals(qualifiedName));
             }
 
-            if (argData.IsValid && argData.IsSpecialSerializableType())
+            if (argData.IsValid && argData.DontCreateMirrorStruct())
             {
-                return false;
+                return false; // don't add to struct registry
             }
 
             List<IFieldSymbol> fields = null;
@@ -180,7 +209,7 @@ namespace SourceGenerator.Logging
             return structData.IsValid;
         }
 
-        private GeneratorExecutionContext                         m_Context;
+        private ContextWrapper                         m_Context;
         private Dictionary<LogCallKind, List<LogCallArgumentData>>   m_UniqueInvokeArgs;
         private Dictionary<string, LogStructureDefinitionData>    m_StructRegistry;
         private uint                                              m_LocalTypeId;

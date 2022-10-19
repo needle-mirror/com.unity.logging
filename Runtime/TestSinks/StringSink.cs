@@ -20,8 +20,20 @@ using UnityEngine.Assertions;
 
 namespace Unity.Logging.Sinks
 {
+    /// <summary>
+    /// Extension class for LoggerWriterConfig .StringLogger
+    /// </summary>
     public static class StringLoggerSinkExt
     {
+        /// <summary>
+        /// Write logs to the string in a text form
+        /// </summary>
+        /// <param name="writeTo">Logger config</param>
+        /// <param name="formatter">Formatter that should be used by this sink. Text is default</param>
+        /// <param name="captureStackTrace">True if stack traces should be captured</param>
+        /// <param name="minLevel">Minimal level of logs for this particular sink. Null if common level should be used</param>
+        /// <param name="outputTemplate">Output message template for this particular sink. Null if common template should be used</param>
+        /// <returns>Logger config</returns>
         public static LoggerConfig StringLogger(this LoggerWriterConfig writeTo,
                                                 FormatterStruct formatter = default,
                                                 bool? captureStackTrace = null,
@@ -35,13 +47,32 @@ namespace Unity.Logging.Sinks
         }
     }
 
+    /// <summary>
+    /// String sink class
+    /// </summary>
     [BurstCompile]
     public class StringSink : SinkSystemBase
     {
+        /// <summary>
+        /// Configuration for string sink
+        /// </summary>
         public class Configuration : SinkConfiguration
         {
+            /// <summary>
+            /// Creates the StringSink
+            /// </summary>
+            /// <param name="logger">Logger that owns sink</param>
+            /// <returns>SinkSystemBase</returns>
             public override SinkSystemBase CreateSinkInstance(Logger logger) => CreateAndInitializeSinkInstance<StringSink>(logger, this);
 
+            /// <summary>
+            /// Constructor for the configuration
+            /// </summary>
+            /// <param name="writeTo">Logger config</param>
+            /// <param name="formatter">Formatter that should be used by this sink. Text is default</param>
+            /// <param name="captureStackTraceOverride">True if stack traces should be captured. Null if default</param>
+            /// <param name="minLevelOverride">Minimal level of logs for this particular sink. Null if common level should be used</param>
+            /// <param name="outputTemplateOverride">Output message template for this particular sink. Null if common template should be used</param>
             public Configuration(LoggerWriterConfig writeTo, FormatterStruct formatter,
                                  bool? captureStackTraceOverride = null, LogLevel? minLevelOverride = null, FixedString512Bytes? outputTemplateOverride = null)
                 : base(writeTo, formatter, captureStackTraceOverride, minLevelOverride, outputTemplateOverride)
@@ -50,6 +81,10 @@ namespace Unity.Logging.Sinks
 
         private int m_StringBuilderId;
 
+        /// <summary>
+        /// Creates <see cref="LogController.SinkStruct"/>
+        /// </summary>
+        /// <returns>SinkStruct</returns>
         public override LogController.SinkStruct ToSinkStruct()
         {
             var s = base.ToSinkStruct();
@@ -80,18 +115,30 @@ namespace Unity.Logging.Sinks
             }
         }
 
+        /// <summary>
+        /// Initialization of the sink using <see cref="Logger"/> and <see cref="SinkConfiguration"/> of this Sink
+        /// </summary>
+        /// <param name="logger">Logger that owns the sink</param>
+        /// <param name="systemConfig">Configuration</param>
         public override void Initialize(Logger logger, SinkConfiguration systemConfig)
         {
             m_StringBuilderId = UnManagedMemoryLogHandler.Create();
             base.Initialize(logger, systemConfig);
         }
 
+        /// <summary>
+        /// Dispose the sink
+        /// </summary>
         public override void Dispose()
         {
             UnManagedMemoryLogHandler.Dispose(m_StringBuilderId);
             base.Dispose();
         }
 
+        /// <summary>
+        /// Get everything that was written as a string
+        /// </summary>
+        /// <returns>String with all output in the sink</returns>
         public string GetString()
         {
             return UnManagedMemoryLogHandler.FlushOutput(m_StringBuilderId);
@@ -102,6 +149,9 @@ namespace Unity.Logging.Sinks
             UnManagedMemoryLogHandler.WriteText(m_StringBuilderId, contents);
         }
 
+        /// <summary>
+        /// Debug assertion that makes sure there is no StringSinks
+        /// </summary>
         public static void AssertNoSinks()
         {
             UnManagedMemoryLogHandler.AssertNoSinks();

@@ -9,6 +9,9 @@ using Unity.Logging.Sinks;
 
 namespace Unity.Logging.Sinks
 {
+    /// <summary>
+    /// Extension class for LoggerWriterConfig .StdOut
+    /// </summary>
     public static class StdOutSinkSystemExt
     {
         /// <summary>
@@ -39,16 +42,36 @@ namespace Unity.Logging.Sinks
     [BurstCompile]
     public class StdOutSinkSystem : SinkSystemBase
     {
+        /// <summary>
+        /// Configuration for StdOut sink
+        /// </summary>
         public class Configuration : SinkConfiguration
         {
+            /// <summary>
+            /// Creates the StdOutSinkSystem
+            /// </summary>
+            /// <param name="logger">Logger that owns sink</param>
+            /// <returns>SinkSystemBase</returns>
             public override SinkSystemBase CreateSinkInstance(Logger logger) => CreateAndInitializeSinkInstance<StdOutSinkSystem>(logger, this);
 
+            /// <summary>
+            /// Constructor for the configuration
+            /// </summary>
+            /// <param name="writeTo">Logger config</param>
+            /// <param name="formatter">Formatter that should be used by this sink. Text is default</param>
+            /// <param name="captureStackTraceOverride">True if stack traces should be captured. Null if default</param>
+            /// <param name="minLevelOverride">Minimal level of logs for this particular sink. Null if common level should be used</param>
+            /// <param name="outputTemplateOverride">Output message template for this particular sink. Null if common template should be used</param>
             public Configuration(LoggerWriterConfig writeTo, FormatterStruct formatter,
                                  bool? captureStackTraceOverride = null, LogLevel? minLevelOverride = null, FixedString512Bytes? outputTemplateOverride = null)
                 : base(writeTo, formatter, captureStackTraceOverride, minLevelOverride, outputTemplateOverride)
             {}
         }
 
+        /// <summary>
+        /// Creates <see cref="LogController.SinkStruct"/>
+        /// </summary>
+        /// <returns>SinkStruct</returns>
         public override LogController.SinkStruct ToSinkStruct()
         {
             var s = base.ToSinkStruct();

@@ -7,8 +7,37 @@ namespace Unity.Logging
     /// </summary>
     public static class MessageParser
     {
-        public enum ParseContextResult { NoArgs, NormalArg, EscOpenBrace, EscCloseBrace };
+        /// <summary>
+        /// Parser state
+        /// </summary>
+        public enum ParseContextResult
+        {
+            /// <summary>
+            /// No arguments were parsed
+            /// </summary>
+            NoArgs,
+            /// <summary>
+            /// Argument was parsed
+            /// </summary>
+            NormalArg,
+            /// <summary>
+            /// { symbol
+            /// </summary>
+            EscOpenBrace,
+            /// <summary>
+            /// } symbol
+            /// </summary>
+            EscCloseBrace
+        };
 
+        /// <summary>
+        /// Parses the UTF8 string and returns the argument if it was found
+        /// </summary>
+        /// <param name="rawBuffer">UTF8 string pointer</param>
+        /// <param name="rawBufferLength">UTF8 string length in bytes</param>
+        /// <param name="currMsgSegment">Segment in the string to parse. Will be changed by the method</param>
+        /// <param name="argSlot">Argument that was found</param>
+        /// <returns>Result of the parsing</returns>
         public static unsafe ParseContextResult FindNextParseStringSegment(in byte* rawBuffer, in int rawBufferLength, ref ParseSegment currMsgSegment, out ParseSegment argSlot)
         {
             var endMsgOffset = rawBufferLength;

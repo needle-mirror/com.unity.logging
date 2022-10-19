@@ -12,6 +12,8 @@ namespace Unity.Logging.Internal.Debug
         {
             return code switch
             {
+                ErrorCodes.NoError => "",
+
                 ErrorCodes.CorruptedDecorationInfo => CorruptedDecorationInfo,
                 ErrorCodes.FailedToLockPayloadBuffer => FailedToLockPayloadBuffer,
                 ErrorCodes.UnableToRetrieveTimestampAndLevel => UnableToRetrieveTimestampAndLevel,
@@ -27,6 +29,7 @@ namespace Unity.Logging.Internal.Debug
                 ErrorCodes.FailedToParseMessage => FailedToParseMessage,
                 ErrorCodes.FailedToAllocatePayloadBecauseOfItsSize => FailedToAllocatePayloadBecauseOfItsSize,
                 ErrorCodes.UnableToRetrieveStackTrace => UnableToRetrieveStackTrace,
+                ErrorCodes.UnableToRetrieveValidPayloadsFromDisjointedMessageBuffer => UnableToRetrieveValidPayloadsFromDisjointedMessageBuffer,
                 _ => throw new ArgumentOutOfRangeException(nameof(code), code, null)
             };
         }
@@ -50,24 +53,78 @@ namespace Unity.Logging.Internal.Debug
         public static FixedString512Bytes EmptyTemplateForTextLogger => "Error: Template is empty! Nothing will be logged";
     }
 
+    /// <summary>
+    /// Error codes for logging
+    /// </summary>
     public enum ErrorCodes
     {
+        /// <summary>
+        /// No error detected
+        /// </summary>
         NoError = 0,
+        /// <summary>
+        /// Header of the message that contains decoration is corrupted
+        /// </summary>
         CorruptedDecorationInfo = -1,
+        /// <summary>
+        /// Failed to lock payload buffer in the memory manager
+        /// </summary>
         FailedToLockPayloadBuffer = -2,
+        /// <summary>
+        /// Message is corrupted - cannot retrieve timestamp and level information
+        /// </summary>
         UnableToRetrieveTimestampAndLevel = -3,
+        /// <summary>
+        /// Message is corrupted - cannot retrieve stacktrace information
+        /// </summary>
         UnableToRetrieveStackTrace = -4,
+        /// <summary>
+        /// Message is corrupted - cannot retrieve decorators information
+        /// </summary>
         UnableToRetrieveDecoratorsInfo = -5,
+        /// <summary>
+        /// Message is corrupted - cannot retrieve message buffer
+        /// </summary>
         UnableToRetrieveSimpleMessageBuffer = -6,
+        /// <summary>
+        /// Message is corrupted - cannot retrieve disjointed message buffer
+        /// </summary>
         UnableToRetrieveDisjointedMessageBuffer = -7,
+        /// <summary>
+        /// Message is corrupted - cannot retrieve payloads from disjointed message buffer
+        /// </summary>
         UnableToRetrieveValidPayloadsFromDisjointedMessageBuffer = -8,
+        /// <summary>
+        /// Message is corrupted - cannot retrieve message from the context buffer
+        /// </summary>
         UnableToRetrieveMessageFromContextBuffer = -9,
+        /// <summary>
+        /// Message is corrupted - cannot retrieve argument
+        /// </summary>
         UnableToRetrieveContextArgument = -10,
+        /// <summary>
+        /// Message is corrupted - cannot retrieve valid argument index
+        /// </summary>
         UnableToRetrieveValidContextArgumentIndex = -11,
+        /// <summary>
+        /// Message is corrupted - cannot retrieve context data from log message buffer
+        /// </summary>
         UnableToRetrieveContextDataFromLogMessageBuffer = -12,
+        /// <summary>
+        /// Type is unknown
+        /// </summary>
         UnknownTypeId = -13,
+        /// <summary>
+        /// Failed to allocate/create disjointed buffer
+        /// </summary>
         FailedToCreateDisjointedBuffer = -14,
+        /// <summary>
+        /// Failed to parse the message
+        /// </summary>
         FailedToParseMessage = -15,
+        /// <summary>
+        /// Failed to allocate a payload because of its size
+        /// </summary>
         FailedToAllocatePayloadBecauseOfItsSize = -16,
     }
 }

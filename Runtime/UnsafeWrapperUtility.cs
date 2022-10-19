@@ -3,9 +3,16 @@ using Unity.Collections;
 
 namespace Unity.Logging.Internal
 {
-    // Used to avoid unsafe code in users assemblies
+    /// <summary>
+    /// Used to avoid unsafe code in users assemblies
+    /// </summary>
     public static class UnsafeWrapperUtility
     {
+        /// <summary>
+        /// Gets unsafePtr from the NativeText and returns its IntPtr
+        /// </summary>
+        /// <param name="nativeText">NativeText</param>
+        /// <returns>NativeText's unsafe ptr</returns>
         public static IntPtr GetPointer(NativeText nativeText)
         {
             unsafe

@@ -2,40 +2,50 @@ using Unity.Collections;
 
 namespace Unity.Logging.Internal
 {
+    /// <summary>
+    /// Structure that describes numeric formatting
+    /// </summary>
+    /// <remarks>
+    ///
+    /// For more information on numeric formatting, see Microsoft's documentation on <a href="https://docs.microsoft.com/en-us/dotnet/standard/base-types/standard-numeric-format-strings">standard numeric formatting</a> and <a href="https://docs.microsoft.com/en-us/dotnet/standard/base-types/custom-numeric-format-strings">custom format strings</a>.
+    /// </remarks>
     public readonly struct NumericFormat
     {
+        /// <summary>
+        /// Letter-specifier. For {0:C2} this is 2
+        /// </summary>
         public readonly uint Precision; //used for LeftZeroes
+        /// <summary>
+        /// Letter-specifier. For {0:C2} this is C
+        /// </summary>
         public readonly Specifier Spec;
+        /// <summary>
+        /// If Letter-specifier is uppercase
+        /// </summary>
         public readonly bool UpperCase;
 
         // custom specifier data:
 
-        // 0 and #: I feel like these affect precision in *some* way? need a bit to think about this one.
         // "The position of the leftmost zero before the decimal point and the rightmost zero after the decimal point determines the range of digits that are always present in the result string."
-        // So the outermost zeroes determine minimum precision, while real precision may vary; # digits beyond that are implicit?
+        // So the outermost zeroes determine minimum precision, while real precision may vary
         // {0:00000000} 12386       = 00012386
         // {0:00000000} 12386000    = 12386000
         // {0:G8} 12386000          = 12386000
         // {0:G5} 12386             = 12386
 
-        // .:
-        // number of digits from left of number to put decimal
-        // type is signed int; negative value (its default of -1) indicates that the decimal point placement is implicit, positive value indicates explicit placement
-        // only the first instance of this character is relevant, all other characters are ignored
-        // position is in reference to digits only
-        public readonly int DecimalPointLocation;
-
-        // used for RightZeroes
-        public readonly uint FractionalPrecision;
-
-        // ,:
-        // number of digits to insert comma between character groups, e.g. a GroupSeparator of 3 applied to 1234567890 = 1,234,567,890
+        /// <summary>
+        /// Number of digits to insert comma between character groups, e.g. a GroupSeparator of 3 applied to 1234567890 = 1,234,567,890
+        /// </summary>
         public readonly uint GroupSeparatorDigits;
-        // number of times to divide number by 1,000
+
+        /// <summary>
+        /// Number of times to divide number by 1,000
+        /// </summary>
         public readonly uint NumberScalingSeparators;
 
-        // {0:#,.000000}", 12386
-
+        /// <summary>
+        /// Standard format specifier. See https://docs.microsoft.com/en-us/dotnet/standard/base-types/standard-numeric-format-strings
+        /// </summary>
         public enum Specifier : byte
         {
             /// <summary>
@@ -101,6 +111,9 @@ namespace Unity.Logging.Internal
             Custom
         }
 
+        /// <summary>
+        /// Custom format specifier. See https://docs.microsoft.com/en-us/dotnet/standard/base-types/custom-numeric-format-strings
+        /// </summary>
         public enum CustomSpecifier : byte
         {
             /// <summary>
@@ -508,8 +521,6 @@ namespace Unity.Logging.Internal
             Precision = precision;
             UpperCase = upperCase;
 
-            DecimalPointLocation = decimalPointLocation;
-            FractionalPrecision = decimalPrecision;
             GroupSeparatorDigits = groupSeparatorDigits;
             NumberScalingSeparators = numberScalingSeparators;
         }

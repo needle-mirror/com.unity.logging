@@ -5,9 +5,18 @@ using Unity.Collections.LowLevel.Unsafe;
 
 namespace Unity.Logging
 {
+    /// <summary>
+    /// Utilities for writing JSON
+    /// </summary>
     [BurstCompile]
     public static class JsonWriter
     {
+        /// <summary>
+        /// Appends escaped JSON UTF8 string into <see cref="UnsafeText"/>
+        /// </summary>
+        /// <param name="jsonOutput">UnsafeText append to</param>
+        /// <param name="rawMsgBuffer">UTF8 string to escape</param>
+        /// <param name="rawMsgBufferLength">Length of the UTF8 string to escape</param>
         public static unsafe void AppendEscapedJsonString(ref UnsafeText jsonOutput, byte* rawMsgBuffer, int rawMsgBufferLength)
         {
             for (var offset = 0; offset < rawMsgBufferLength;)

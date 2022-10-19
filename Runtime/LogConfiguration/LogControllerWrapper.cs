@@ -1,10 +1,5 @@
 //#define DEBUG_DEADLOCKS
 
-#if UNITY_DOTSRUNTIME
-#define USE_BASELIB
-#define USE_BASELIB_FILEIO
-#endif
-
 #if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
 #define DEBUG_ADDITIONAL_CHECKS
 #endif
@@ -179,46 +174,27 @@ namespace Unity.Logging.Internal
 
     internal static class ThreadGuard
     {
-#if !UNITY_DOTSRUNTIME
-    #if !UNITY_EDITOR
-        #if USE_BASELIB
-                private static IntPtr s_MainThreadId;
-        #else
-                private static Thread s_MainThread;
-        #endif
-                private static bool s_Initialized = false;
+        struct ThreadGuardKey {}
 
-                [UnityEngine.RuntimeInitializeOnLoadMethod(UnityEngine.RuntimeInitializeLoadType.SubsystemRegistration)]
-                static void InitRun()
-                {
-                    if (s_Initialized) return;
-        #if USE_BASELIB
-                    s_MainThreadId = Baselib.LowLevel.Binding.Baselib_Thread_GetCurrentThreadId();
-        #else
-                    s_MainThread = Thread.CurrentThread;
-        #endif
-                    s_Initialized = true;
-                }
-    #endif
+        private static readonly SharedStatic<IntPtr> s_MainThreadId = SharedStatic<IntPtr>.GetOrCreate<ThreadGuardKey, IntPtr>(16);
+        private static readonly SharedStatic<byte> s_Initialized = SharedStatic<byte>.GetOrCreate<ThreadGuardKey, byte>(16);
+
+#if !UNITY_DOTSRUNTIME
+        [UnityEngine.RuntimeInitializeOnLoadMethod(UnityEngine.RuntimeInitializeLoadType.SubsystemRegistration)]
 #endif
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static bool IsMainThread()
+        public static void InitializeFromMainThread()
         {
-#if UNITY_DOTSRUNTIME
-            return true; // not supported
-#elif UNITY_EDITOR
-            return UnityEditorInternal.InternalEditorUtility.CurrentThreadIsMainThread();
-#else
-            if (s_Initialized == false)
-                throw new Exception("ThreadGuard was not initialized, cannot check what thread is this");
-    #if USE_BASELIB
-                var current = Baselib.LowLevel.Binding.Baselib_Thread_GetCurrentThreadId();
-                return s_MainThreadId == current;
-    #else
-                var current = Thread.CurrentThread;
-                return s_MainThread == current;
-    #endif
-#endif
+            if (s_Initialized.Data != 0) return;
+
+            s_MainThreadId.Data = Baselib.LowLevel.Binding.Baselib_Thread_GetCurrentThreadId();
+            s_Initialized.Data = 1;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool IsMainThread()
+        {
+            MustBeInitialized();
+            return s_MainThreadId.Data == Baselib.LowLevel.Binding.Baselib_Thread_GetCurrentThreadId();
         }
 
         /// <summary>
@@ -239,6 +215,18 @@ namespace Unity.Logging.Internal
         public static void AssertRunningOnMainThread()
         {
             EnsureRunningOnMainThread();
+        }
+
+        /// <summary>
+        /// Throws if ThreadGuard wasn't initialized before the usage
+        /// </summary>
+        /// <exception cref="Exception">throws if ThreadGuard is not initialized</exception>
+        [Conditional("DEBUG_ADDITIONAL_CHECKS")]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static void MustBeInitialized()
+        {
+            if (s_Initialized.Data == 0)
+                throw new Exception($"ThreadGuard was not initialized before usage");
         }
     }
 
@@ -492,6 +480,12 @@ namespace Unity.Logging.Internal
         public static ref LogController GetLogControllerByIndexUnderLock(int index)
         {
             return ref s_LogControllers.Data.ElementAt(index);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int GetLogControllersCount()
+        {
+            return s_LogControllers.Data.Length;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

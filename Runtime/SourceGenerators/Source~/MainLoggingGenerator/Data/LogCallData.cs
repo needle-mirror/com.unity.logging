@@ -8,18 +8,20 @@ namespace SourceGenerator.Logging
     {
         public readonly LogCallMessageData        MessageData;
         public readonly List<LogCallArgumentData> ArgumentData;
+        public readonly bool ShouldBeMarkedUnsafe;
 
         public bool IsValid => MessageData.IsValid && ArgumentData != null;
 
         // NOTE: UnsafeText / NativeText shouldn't use PayloadHandle for messages, since BuildMessage can handle them, like FixedString
         public bool ShouldUsePayloadHandleForMessage => MessageData.ShouldUsePayloadHandle;
         public bool HasLiteralStringMessage => MessageData.IsLiteral;
-        public bool HasLiteralStrings => HasLiteralStringMessage || ArgumentData.Any(a => a.IsLiteral);
 
         public LogCallData(in LogCallMessageData msgData, IEnumerable<LogCallArgumentData> argData)
         {
             MessageData = msgData;
             ArgumentData = new List<LogCallArgumentData>(argData);
+
+            ShouldBeMarkedUnsafe = MessageData.IsUnsafe || ArgumentData.Any(a => a.IsUnsafe);
         }
 
         public bool Equals(LogCallData other)

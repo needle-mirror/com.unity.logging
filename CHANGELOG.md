@@ -1,4 +1,26 @@
-# Changelog
+
+## [1.0.0-exp.7] - 2022-10-19
+
+### Added
+
+* Ability to provide custom ToString-like formatting
+* Missing documentation
+* Structures with unsafe pointers inside can be logged.
+* Pointers can be logged
+
+### Changed
+
+* Incremental sourcegen implemented
+
+### Removed
+
+* Jobs dependency removed
+* USE_BASELIB define removed - it is always set
+
+### Fixed
+
+* Unity 2023 compatibility
+* Initialization order because of cctor is not called in some Burst cases
 
 ## [1.0.0-exp.6] - 2022-09-21
 
@@ -67,68 +89,9 @@
 * Crash in some cases when a user calls Log. from non-main thread first (so cctor is called on non-main thread)
 * HideInStacktrace now works for burst's directcalls
 
-
-## [0.51.1] - 2022-06-27
-
-### Changed
-
-* Updated `com.unity.collections` to version `1.4.0`
-
-## [0.51.0] - 2022-05-04
-
-### Changed
-
-* Dependencies
-    * Burst 1.6.4
-    * Jobs 0.51.0
-
-## [0.50.0] - 2021-09-17
-
-### Added
-
-* Customizable timestamp support.
-* Stacktrace support. .net core and ns20 have much faster stack traces.
-* Logger API to be able to Add Sinks after creation
-* OnNewLoggerCreated and CallForEveryLogger for LoggerManager
-* Ability to change min logging level in runtime
-* Test StringSink and UnityDebugLogSink added
-* Tests for burst compatibility added
-* USE_BASELIB define is in use for Unity 2020.3.26+ and 2021.2.8+
-* USE_BASELIB_FILEIO define is in use for Unity 2021 where it was added to the baselib
-* SelfLog FailedToAllocatePayloadBecauseOfItsSize message
-* Il2CppSetOption checks disabled on perf critical code
-* AggressiveInlining on perf critical code
-
-### Changed
-
-* Better error reporting from source generators
-* Initialize call for Sinks doesn't require LoggerConfig
-* Better Log call detection in the source generators
-* il2cpp issue about missing MonoPInvokeCallback is fixed.
-* Documentation and samples updated
-* MaximumPayloadSize is increased to 32768
-* All memory allocations are aligned to 8 bytes
-* MaximumPayloadSize is increased to 1024 * 32
-* Default and max buffer capacity reduced
-
-### Deprecated
+### Security
 
 
-### Removed
-
-
-### Fixed
-
-* Workaround for Burst bug: DST-548
-* Baselib File sink fixed
-* Tests issues with il2cpp
-* Arm64 crash fix
-* Race condition fixed, new locking mechanism implemented
-* Timestamps precision improved significantly, so messages are sorted correctly
-* Timestamp stability improved
-* Compatibility with Unity 2021 improved
-* Incorrect timestamp fixed
-* Bug with stacktrace for the text loggers
 
 
 ## [0.4.0] - 2021-09-17

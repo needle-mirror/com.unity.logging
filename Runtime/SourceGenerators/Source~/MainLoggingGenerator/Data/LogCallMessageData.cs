@@ -1,5 +1,7 @@
 using System;
 using System.Linq;
+using System.Text;
+using LoggingCommon;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
@@ -25,6 +27,8 @@ namespace SourceGenerator.Logging
         public bool IsManagedString => IsString && (FixedStringType.IsValid == false && FixedStringUtils.IsNativeOrUnsafeText(MessageType) == false);
         public bool IsReferenceType => Symbol != null && Symbol.IsReferenceType;
         public bool ShouldUsePayloadHandle => FixedStringType.IsValid == false && IsReferenceType;
+        private bool IsUnsafePointer => Symbol != null && Symbol.TypeKind == TypeKind.Pointer;
+        public bool IsUnsafe => IsUnsafePointer;
 
         public LogCallMessageData(ITypeSymbol symbol, ExpressionSyntax expressionSyntax, string msgType, string litText, FixedStringUtils.FSType fixedStringType = default)
         {
@@ -66,9 +70,9 @@ namespace SourceGenerator.Logging
         }
 
         public const string DefaultFixedString32Literal = "Default";
-        public static LogCallMessageData FixedString32(GeneratorExecutionContext context)
+        public static LogCallMessageData FixedString32(ContextWrapper context)
         {
-            var str = context.Compilation.GetSpecialType(SpecialType.System_String);
+            var str = context.GetStringTypeSymbol();
             return new LogCallMessageData(str, null, FixedStringUtils.Smallest.Name, DefaultFixedString32Literal, FixedStringUtils.Smallest);
         }
 
@@ -92,27 +96,7 @@ namespace SourceGenerator.Logging
             return $"{{[FormatMessage] type=<{MessageType}> literal=<{LiteralValue}> | expression=<{Expression}>}}";
         }
 
-        public string GetParameterTypeForUser(bool blittable = false)
-        {
-            if (blittable)
-            {
-                if (ShouldUsePayloadHandle)
-                    return "PayloadHandle";
-
-                if (FixedStringType.IsValid == false && Symbol.IsReferenceType)
-                    return FullArgumentTypeName;
-            }
-
-            if (MessageType == "object")
-            {
-                if (FixedStringType.IsValid)
-                    return MessageType;
-                return FullArgumentTypeName;
-            }
-            return MessageType;
-        }
-
-        public Location GetLocation(GeneratorExecutionContext context, int segmentOffset, int segmentLength)
+        public Location GetLocation(ContextWrapper context, int segmentOffset, int segmentLength)
         {
             var loc = Expression?.GetLocation();
 
@@ -134,10 +118,90 @@ namespace SourceGenerator.Logging
             }
             else
             {
-                loc = context.Compilation.SyntaxTrees.First().GetRoot().GetLocation();
+                loc = context.DefaultLocation();
             }
 
             return loc;
+        }
+
+        string GetParameterTypeForUser(bool visibleToBurst = false)
+        {
+            if (visibleToBurst)
+            {
+                if (ShouldUsePayloadHandle)
+                    return "PayloadHandle";
+
+                if (FixedStringType.IsValid == false && Symbol.IsReferenceType)
+                    return FullArgumentTypeName;
+            }
+
+            if (MessageType == "object")
+            {
+                if (FixedStringType.IsValid)
+                    return MessageType;
+                return FullArgumentTypeName;
+            }
+            return MessageType;
+        }
+
+        public StringBuilder AppendUserOrBurstVisibleParameter(StringBuilder sb, bool visibleToBurst)
+        {
+            if (IsNativeText)
+                return sb.Append($"in NativeTextBurstWrapper msg");
+
+            var msgType = GetParameterTypeForUser(visibleToBurst);
+
+            if (msgType == "string" || msgType == "global::System.String")
+                return sb.Append($"string msg");
+
+            return sb.Append($"in {msgType} msg");
+        }
+
+        public StringBuilder AppendCallParameterForBurst(StringBuilder sb)
+        {
+            if (ShouldUsePayloadHandle)
+                sb.Append("payloadHandle_msg");
+            else
+                sb.Append("msg");
+
+            return sb;
+        }
+
+        public string GetHandlesBuildCode()
+        {
+            if (Omitted)
+            {
+                return $@"
+            handle = Unity.Logging.Builder.BuildMessage(""{LiteralValue}"", ref memManager);
+            if (handle.IsValid)
+                handles.Add(handle);";
+            }
+
+            if (ShouldUsePayloadHandle)
+            {
+                return $@"
+            if (msg.IsValid)
+                handles.Add(msg);";
+            }
+
+            return @"
+            handle = Unity.Logging.Builder.BuildMessage(msg, ref memManager);
+            if (handle.IsValid)
+                handles.Add(handle);";
+        }
+
+        public void AppendConvertCode(StringBuilder sbConvert, StringBuilder sbConvertGlobal)
+        {
+            const string name = "msg";
+            var call = (MessageType == "object") ? ".ToString()" : "";
+
+            sbConvert.Append($@"
+                PayloadHandle payloadHandle_{name} = Unity.Logging.Builder.BuildMessage({name}{call}, ref logController.MemoryManager);
+");
+
+            sbConvertGlobal?.Append($@"
+                PayloadHandle payloadHandle_{name} = Unity.Logging.Builder.BuildMessage({name}{call}, ref Unity.Logging.Internal.LoggerManager.GetGlobalDecoratorMemoryManager());
+");
         }
     }
 }

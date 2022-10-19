@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using LoggingCommon;
 using Microsoft.CodeAnalysis;
 using SourceGenerator.Logging;
 using SourceGenerator.Logging.Declarations;
@@ -37,8 +38,7 @@ namespace MainLoggingGenerator.Extractors
             return false;
         }
 
-        public static LogStructureFieldData Extract(GeneratorExecutionContext ctx,
-            LogTypesGenerator gen, IFieldSymbol field, LogCallArgumentData argument)
+        public static LogStructureFieldData Extract(ContextWrapper ctx, LogTypesGenerator gen, IFieldSymbol field, LogCallArgumentData argument)
         {
             // we skip [NonSerialized] fields
             if (ShouldIgnore(field, out var rename))

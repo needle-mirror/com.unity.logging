@@ -20,6 +20,9 @@ namespace Unity.Logging
     [Il2CppSetOption(Option.DivideByZeroChecks, false)]
     public struct Builder
     {
+        /// <summary>
+        /// FixedString32 that contains Environment.NewLine so Burst can read it
+        /// </summary>
         public static readonly SharedStatic<FixedString32Bytes> EnvNewLine = SharedStatic<FixedString32Bytes>.GetOrCreate<FixedString32Bytes, Builder>(16);
 
         [BurstDiscard]
@@ -28,7 +31,14 @@ namespace Unity.Logging
             EnvNewLine.Data = new FixedString32Bytes(Environment.NewLine);
         }
 
-        // When CreateText is called in the burst - CreateText__Unmanaged is called instead
+        /// <summary>
+        /// Creates <see cref="UnsafeText"/> that has UTF8 representation of source string
+        /// When CreateText is called in the burst - CreateText__Unmanaged is called instead
+        /// </summary>
+        /// <param name="utf8Ptr">UTF8 string pointer</param>
+        /// /// <param name="utf8Length">UTF8 string's length in bytes</param>
+        /// <param name="allocator">Allocator that should be used to allocate <see cref="UnsafeText"/></param>
+        /// <returns><see cref="UnsafeText"/> that has UTF8 representation of source string</returns>
         public static unsafe UnsafeText CreateText__Unmanaged(byte* utf8Ptr, int utf8Length, Allocator allocator)
         {
             var res = new UnsafeText(utf8Length, allocator) { Length = utf8Length };
@@ -36,16 +46,21 @@ namespace Unity.Logging
             return res;
         }
 
+        /// <summary>
+        /// Creates <see cref="UnsafeText"/> that has UTF8 representation of source string
+        /// </summary>
+        /// <param name="source">UTF16 string</param>
+        /// <param name="allocator">Allocator that should be used to allocate <see cref="UnsafeText"/></param>
+        /// <returns><see cref="UnsafeText"/> that has UTF8 representation of source string</returns>
         public static unsafe UnsafeText CreateText(string source, Allocator allocator)
         {
             fixed(char* sourcePtr = source)
             {
-                var lengthBytes = 0;
-                lengthBytes = source.Length * 2;
+                var lengthBytes = source.Length * 2;
 
                 var res = new UnsafeText(lengthBytes, allocator) { Length = lengthBytes };
 
-                var error = UTF8ArrayUnsafeUtility.Copy(res.GetUnsafePtr(), out var actualBytes, res.Capacity, sourcePtr, lengthBytes / 2);
+                var error = UTF8ArrayUnsafeUtility.Copy(res.GetUnsafePtr(), out var actualBytes, res.Capacity, sourcePtr, source.Length);
                 if (error != CopyError.None)
                 {
                     res.Dispose();
@@ -58,6 +73,16 @@ namespace Unity.Logging
             }
         }
 
+        /// <summary>
+        /// Allocates memory in the <see cref="LogMemoryManager"/> and copies data into it with headers. Create copy of string message in UTF8 in PayloadBuffer, prepended with optional typeId and length
+        /// </summary>
+        /// <param name="message">UTF8 string to copy</param>
+        /// <param name="memAllocator">MemoryManager where to allocate the <see cref="PayloadHandle"/></param>
+        /// <param name="prependTypeId">If true - typeId will be added to payload</param>
+        /// <param name="prependLength">If true - length in bytes will be added to payload</param>
+        /// <param name="deferredRelease">If true - <see cref="PayloadHandle"/> will be registered for deferred release (after 2 updates)</param>
+        /// <typeparam name="T">UTF8 collections string</typeparam>
+        /// <returns><see cref="PayloadHandle"/> that holds the data</returns>
         public static unsafe PayloadHandle CopyCollectionStringToPayloadBuffer<T>(in T message, ref LogMemoryManager memAllocator, bool prependTypeId = false, bool prependLength = false, bool deferredRelease = false) where T : IUTF8Bytes, INativeList<byte>
         {
             var allocSize = message.Length;
@@ -105,6 +130,13 @@ namespace Unity.Logging
             return handle;
         }
 
+        /// <summary>
+        /// Appends data from <see cref="PayloadHandle"/> as UTF8 string into <see cref="UnsafeText"/>
+        /// </summary>
+        /// <param name="output"><see cref="UnsafeText"/> append to</param>
+        /// <param name="payloadHandle"><see cref="PayloadHandle"/> that has the UTF8 string</param>
+        /// <param name="memAllocator"><see cref="LogMemoryManager"/> that owns the <see cref="PayloadHandle"/></param>
+        /// <returns>True if append was successful</returns>
         public static bool AppendStringAsPayloadHandle(ref UnsafeText output, PayloadHandle payloadHandle, ref LogMemoryManager memAllocator)
         {
             if (memAllocator.RetrievePayloadBuffer(payloadHandle, out var buffer))
@@ -118,7 +150,19 @@ namespace Unity.Logging
             return false;
         }
 
-        // Create copy of string message in PayloadBuffer, prepended with optional typeId and length
+        /// <summary>
+        /// Allocates memory in the <see cref="LogMemoryManager"/> and copies data into it with headers.
+        /// </summary>
+        /// <remarks>
+        /// Create a copy of string message in UTF8 in PayloadBuffer, prepended with optional typeId and length.
+        /// When CopyStringToPayloadBuffer is called in the Burst code, CopyStringToPayloadBuffer__Unmanaged is called instead
+        /// </remarks>
+        /// <param name="source">String that stores the data in UTF16</param>
+        /// <param name="memAllocator">MemoryManager where to allocate the <see cref="PayloadHandle"/></param>
+        /// <param name="prependTypeId">If true - typeId will be added to payload</param>
+        /// <param name="prependLength">If true - length in bytes will be added to payload</param>
+        /// <param name="deferredRelease">If true - <see cref="PayloadHandle"/> will be registered for deferred release (after 2 updates)</param>
+        /// <returns><see cref="PayloadHandle"/> that holds the data</returns>
         public static PayloadHandle CopyStringToPayloadBuffer(string source, ref LogMemoryManager memAllocator, bool prependTypeId = false, bool prependLength = false, bool deferredRelease = false)
         {
             var allocSize = source.Length * 2;
@@ -178,7 +222,20 @@ namespace Unity.Logging
             return handle;
         }
 
-        // When CopyStringToPayloadBuffer is called in the burst - CopyStringToPayloadBuffer__Unmanaged is called instead
+        /// <summary>
+        /// Allocates memory in the <see cref="LogMemoryManager"/> and copies data into it with headers.
+        /// </summary>
+        /// <remarks>
+        /// Create a copy of the string message in PayloadBuffer, prepended with optional typeId and length.
+        /// When CopyStringToPayloadBuffer is called in Burst code, CopyStringToPayloadBuffer__Unmanaged is called instead.
+        /// </remarks>
+        /// <param name="sourcePtr">Pointer to data</param>
+        /// <param name="sourceLength">Length of data in bytes</param>
+        /// <param name="memAllocator">MemoryManager where to allocate the <see cref="PayloadHandle"/></param>
+        /// <param name="prependTypeId">If true - typeId will be added to payload</param>
+        /// <param name="prependLength">If true - length in bytes will be added to payload</param>
+        /// <param name="deferredRelease">If true - <see cref="PayloadHandle"/> will be registered for deferred release (after 2 updates)</param>
+        /// <returns><see cref="PayloadHandle"/> that holds the data</returns>
         public static unsafe PayloadHandle CopyStringToPayloadBuffer__Unmanaged(byte* sourcePtr, int sourceLength, ref LogMemoryManager memAllocator, bool prependTypeId = false, bool prependLength = false, bool deferredRelease = false)
         {
             var allocSize = sourceLength;
@@ -194,38 +251,35 @@ namespace Unity.Logging
 
             if (handle.IsValid)
             {
-                unsafe
+                var dataPtr = (byte*)NativeArrayUnsafeUtility.GetUnsafeBufferPointerWithoutChecks(buffer);
+                var dataLen = allocSize;
+
+                var lenPtr = dataPtr;
+
+                if (prependTypeId) {
+                    ulong typeId = 200;
+                    UnsafeUtility.MemCpy(&dataPtr[0], &typeId, UnsafeUtility.SizeOf<ulong>());
+
+                    dataPtr += UnsafeUtility.SizeOf<ulong>();
+                    dataLen -= UnsafeUtility.SizeOf<ulong>();
+                }
+
+                if (prependLength) {
+                    lenPtr = dataPtr;
+
+                    dataPtr += UnsafeUtility.SizeOf<int>();
+                    dataLen -= UnsafeUtility.SizeOf<int>();
+                }
+
                 {
-                    var dataPtr = (byte*)NativeArrayUnsafeUtility.GetUnsafeBufferPointerWithoutChecks(buffer);
-                    var dataLen = allocSize;
+                    UnsafeUtility.MemCpy(dataPtr, sourcePtr, sourceLength);
+                    var actualBytes = sourceLength;
 
-                    var lenPtr = dataPtr;
+                    if (prependLength)
+                        UnsafeUtility.MemCpy(&lenPtr[0], &actualBytes, UnsafeUtility.SizeOf<int>());
 
-                    if (prependTypeId) {
-                        ulong typeId = 200;
-                        UnsafeUtility.MemCpy(&dataPtr[0], &typeId, UnsafeUtility.SizeOf<ulong>());
-
-                        dataPtr += UnsafeUtility.SizeOf<ulong>();
-                        dataLen -= UnsafeUtility.SizeOf<ulong>();
-                    }
-
-                    if (prependLength) {
-                        lenPtr = dataPtr;
-
-                        dataPtr += UnsafeUtility.SizeOf<int>();
-                        dataLen -= UnsafeUtility.SizeOf<int>();
-                    }
-
-                    {
-                        UnsafeUtility.MemCpy(dataPtr, sourcePtr, sourceLength);
-                        var actualBytes = sourceLength;
-
-                        if (prependLength)
-                            UnsafeUtility.MemCpy(&lenPtr[0], &actualBytes, UnsafeUtility.SizeOf<int>());
-
-                        if (actualBytes < dataLen)
-                            UnsafeUtility.MemSet(&dataPtr[actualBytes], 0, dataLen - actualBytes);
-                    }
+                    if (actualBytes < dataLen)
+                        UnsafeUtility.MemSet(&dataPtr[actualBytes], 0, dataLen - actualBytes);
                 }
                 if (deferredRelease)
                     memAllocator.ReleasePayloadBufferDeferred(handle);
@@ -245,7 +299,7 @@ namespace Unity.Logging
             var nativeMsg = new UnsafeText();
             try
             {
-                nativeMsg = CreateText(message, (Unity.Jobs.LowLevel.Unsafe.JobsUtility.IsExecutingJob ? Allocator.Temp : Allocator.TempJob));
+                nativeMsg = CreateText(message, (Jobs.LowLevel.Unsafe.JobsUtility.IsExecutingJob ? Allocator.Temp : Allocator.TempJob));
                 handle = BuildMessage(nativeMsg, ref memAllocator);
             }
             finally
@@ -256,7 +310,14 @@ namespace Unity.Logging
             return handle;
         }
 
-        // When CopyStringToPayloadBuffer is called in the burst - CopyStringToPayloadBuffer__Unmanaged is called instead
+        /// <summary> Helper function to pack generic T into <see cref="LogMemoryManager"/></summary>
+        /// <remarks>
+        /// When BuildMessage is called in Burst code, BuildMessage__Unmanaged is called instead
+        /// </remarks>
+        /// <param name="sourcePtr">Input message's ptr</param>
+        /// /// <param name="sourceLength">Input message's length in bytes</param>
+        /// <param name="memAllocator">Memory manager</param>
+        /// <returns>Handle for the created data</returns>
         public static unsafe PayloadHandle BuildMessage__Unmanaged(byte* sourcePtr, int sourceLength, ref LogMemoryManager memAllocator)
         {
             return BuildMessage(sourcePtr, sourceLength, ref memAllocator);
@@ -276,11 +337,24 @@ namespace Unity.Logging
             }
         }
 
+        /// <summary>
+        /// Writes UTF8 string into <see cref="LogMemoryManager"/>
+        /// </summary>
+        /// <param name="msg"><see cref="NativeTextBurstWrapper"/> nativeText wrapper that has UTF8 string</param>
+        /// <param name="memAllocator">Memory allocator that should allocate the <see cref="PayloadHandle"/> and store the UTF8 string data</param>
+        /// <returns><see cref="PayloadHandle"/> that contains the copied UTF8 string's data</returns>
         public static PayloadHandle BuildMessage(NativeTextBurstWrapper msg, ref LogMemoryManager memAllocator)
         {
             return BuildMessage(msg.ptr, msg.len, ref memAllocator);
         }
 
+        /// <summary>
+        /// Writes UTF8 string into <see cref="LogMemoryManager"/>
+        /// </summary>
+        /// <param name="utf8Ptr">IntPtr pointer to UTF8 string data</param>
+        /// <param name="utf8Length">Length of UTF8 string data</param>
+        /// <param name="memAllocator">Memory allocator that should allocate the <see cref="PayloadHandle"/> and store the UTF8 string data</param>
+        /// <returns><see cref="PayloadHandle"/> that contains the copied UTF8 string's data</returns>
         public static PayloadHandle BuildMessage(IntPtr utf8Ptr, int utf8Length, ref LogMemoryManager memAllocator)
         {
             unsafe
@@ -289,6 +363,13 @@ namespace Unity.Logging
             }
         }
 
+        /// <summary>
+        /// Writes UTF8 string into <see cref="LogMemoryManager"/>
+        /// </summary>
+        /// <param name="utf8Ptr">Pointer to UTF8 string data</param>
+        /// <param name="utf8Length">Length of UTF8 string data</param>
+        /// <param name="memAllocator">Memory allocator that should allocate the <see cref="PayloadHandle"/> and store the UTF8 string data</param>
+        /// <returns><see cref="PayloadHandle"/> that contains the copied UTF8 string's data</returns>
         public unsafe static PayloadHandle BuildMessage(byte* utf8Ptr, int utf8Length, ref LogMemoryManager memAllocator)
         {
             var allocSize = utf8Length;
@@ -312,6 +393,13 @@ namespace Unity.Logging
             return handle;
         }
 
+        /// <summary>
+        /// Adds decorators to <see cref="LogContextWithDecorator"/> payloads list
+        /// </summary>
+        /// <seealso cref="BuildDecorators(ref Unity.Logging.LogController,ref Unity.Logging.Internal.LogContextWithDecorator)"/>
+        /// <param name="logController">LogController that owns the decorators</param>
+        /// <param name="lock">Lock that controls logController's life time</param>
+        /// <param name="handles">List of handles where to add decorators</param>
         public static unsafe void BuildDecorators(ref LogController logController, LogControllerScopedLock @lock, ref FixedList512Bytes<PayloadHandle> handles)
         {
             fixed(FixedList512Bytes<PayloadHandle>* a = &handles)
@@ -321,6 +409,13 @@ namespace Unity.Logging
             }
         }
 
+        /// <summary>
+        /// Adds decorators to <see cref="LogContextWithDecorator"/> payloads list
+        /// </summary>
+        /// <seealso cref="BuildDecorators(ref Unity.Logging.LogController,ref Unity.Logging.Internal.LogContextWithDecorator)"/>
+        /// <param name="logController">LogController that owns the decorators</param>
+        /// <param name="lock">Lock that controls logController's life time</param>
+        /// <param name="handles">List of handles where to add decorators</param>
         public static unsafe void BuildDecorators(ref LogController logController, LogControllerScopedLock @lock, ref FixedList4096Bytes<PayloadHandle> handles)
         {
             fixed(FixedList4096Bytes<PayloadHandle>* a = &handles)
@@ -330,13 +425,18 @@ namespace Unity.Logging
             }
         }
 
+        /// <summary>
+        /// Adds decorators to <see cref="LogContextWithDecorator"/> payloads list
+        /// </summary>
+        /// <param name="logController">LogController that owns the decorators</param>
+        /// <param name="payload">LogContextWithDecorator to add decorators to</param>
         public static unsafe void BuildDecorators(ref LogController logController, ref LogContextWithDecorator payload)
         {
             payload.Lock.MustBeValid();
 
             // header first
             var allocSize = sizeof(ushort) * 3;
-            Assert.IsFalse(allocSize < UnsafePayloadRingBuffer.MinimumPayloadSize);
+            Assert.IsTrue(allocSize >= UnsafePayloadRingBuffer.MinimumPayloadSize);
 
             var nBefore = payload.Length;
 
@@ -515,6 +615,30 @@ namespace Unity.Logging
             return BuildPrimitive(13, &special_byte, UnsafeUtility.SizeOf<byte>(), ref memAllocator);
         }
 
+        /// <summary>
+        /// Helper function to pack a special type of IntPtr
+        /// </summary>
+        /// <param name="special_intptr">Byte to pack</param>
+        /// <param name="memAllocator">Memory manager</param>
+        /// <returns>Handle for the created data</returns>
+        public static unsafe PayloadHandle BuildContextSpecialType(IntPtr special_intptr, ref LogMemoryManager memAllocator)
+        {
+            var l = special_intptr.ToInt64();
+            return BuildPrimitive(14, &l, UnsafeUtility.SizeOf<long>(), ref memAllocator);
+        }
+
+        /// <summary>
+        /// Helper function to pack a special type of UIntPtr
+        /// </summary>
+        /// <param name="special_uintptr">Byte to pack</param>
+        /// <param name="memAllocator">Memory manager</param>
+        /// <returns>Handle for the created data</returns>
+        public static unsafe PayloadHandle BuildContextSpecialType(UIntPtr special_uintptr, ref LogMemoryManager memAllocator)
+        {
+            var l = special_uintptr.ToUInt64();
+            return BuildPrimitive(15, &l, UnsafeUtility.SizeOf<ulong>(), ref memAllocator);
+        }
+
         private static unsafe PayloadHandle BuildPrimitive(ulong typeId, void* argPtr, int argSize, ref LogMemoryManager memAllocator)
         {
             var typeIdSize = UnsafeUtility.SizeOf<ulong>();
@@ -586,7 +710,7 @@ namespace Unity.Logging
         {
             for (var i = 0; i < payloadList.Length; i++)
             {
-                memAllocator.ReleasePayloadBuffer(payloadList[i], out var result, true);
+                memAllocator.ReleasePayloadBuffer(payloadList[i], out _, true);
             }
         }
 

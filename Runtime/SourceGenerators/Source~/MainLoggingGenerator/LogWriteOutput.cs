@@ -12,7 +12,7 @@ namespace SourceGenerator.Logging
 {
     public static class LogWriteOutput
     {
-        public static void SourceGenTypesFile(GeneratorExecutionContext context, StringBuilder sourceGenContent)
+        public static void SourceGenTypesFile(ContextWrapper context, string sourceGenContent)
         {
             using var _ = new Profiler.Auto("LogWriteOutput.SourceGenTypesFile");
 
@@ -26,7 +26,7 @@ namespace SourceGenerator.Logging
             }
         }
 
-        public static void SourceGenParserFile(GeneratorExecutionContext context, StringBuilder sourceGenContent)
+        public static void SourceGenParserFile(ContextWrapper context, string sourceGenContent)
         {
             using var _ = new Profiler.Auto("LogWriteOutput.SourceGenParserFile");
 
@@ -40,7 +40,7 @@ namespace SourceGenerator.Logging
             }
         }
 
-        public static void SourceGenMethodsFile(GeneratorExecutionContext context, StringBuilder sourceGenContent)
+        public static void SourceGenMethodsFile(ContextWrapper context, string sourceGenContent)
         {
             using var _ = new Profiler.Auto("LogWriteOutput.SourceGenMethodsFile");
 
@@ -54,14 +54,14 @@ namespace SourceGenerator.Logging
             }
         }
 
-        private static void LogErrorInternal(Exception e, GeneratorExecutionContext context)
+        private static void LogErrorInternal(Exception e, ContextWrapper context)
         {
             context.LogCompilerErrorUnhandledException(e);
             context.LogCompilerError(CompilerMessages.FileWriteException);
             context.LogCompilerError((e.HResult.ToString(), e.GetType() + " : " + e.Message));
         }
 
-        private static void OutputFileInternal(GeneratorExecutionContext context, StringBuilder sourceGenContent, string filename, bool isSourceFile)
+        private static void OutputFileInternal(ContextWrapper context, string sourceGenContent, string filename, bool isSourceFile)
         {
             using var _ = new Profiler.Auto("LogWriteOutput.OutputFileInternal");
 
@@ -69,7 +69,7 @@ namespace SourceGenerator.Logging
             {
                 var asmName = context.Compilation.AssemblyName ?? "Unknown_assembly";
                 filename = Path.GetFileNameWithoutExtension(filename);
-                context.AddSource($"{asmName}_{filename}", SourceText.From(sourceGenContent.ToString(), Encoding.UTF8));
+                context.AddSource($"{asmName}_{filename}", SourceText.From(sourceGenContent, Encoding.UTF8));
             }
         }
     }

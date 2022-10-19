@@ -65,7 +65,7 @@ class ClassA()
 
             var generator = CommonUtils.GenerateCode(testData);
 
-            var methods = generator.methodsGenCode.ToString();
+            var methods = generator.methodsGenCode;
             Assert.IsTrue(methods.Contains("public static void Info(string msg, in global::StructWithAllNonSerializedAttribute arg0)"));
             Assert.IsTrue(methods.Contains("public static void Info(in global::StructWithAllNonSerializedAttribute arg0)"));
         }

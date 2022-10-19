@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.CodeAnalysis;
 using System.Linq;
+using LoggingCommon;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using SourceGenerator.Logging.Declarations;
 
@@ -87,54 +88,54 @@ namespace SourceGenerator.Logging
             }
         }
 
-        public static void LogInfoMessage(this GeneratorExecutionContext context, string message)
+        public static void LogInfoMessage(this ContextWrapper context, string message)
         {
             Debug.LogInfo(context, message);
         }
 
-        public static void LogCompilerInfo(this GeneratorExecutionContext context, string errorCode, string message, string description = "")
+        public static void LogCompilerInfo(this ContextWrapper context, string errorCode, string message, string description = "")
         {
             Debug.LogInfo(context, $"{errorCode}: {message} {description}");
             LogCompilerMessage(context, errorCode, message, DiagnosticSeverity.Info, description);
         }
 
-        public static void LogCompilerInfo(this GeneratorExecutionContext context, (string, string) info, string description = "")
+        public static void LogCompilerInfo(this ContextWrapper context, (string, string) info, string description = "")
         {
             Debug.LogInfo(context, $"{info.Item1}: {info.Item2} {description}");
             LogCompilerMessage(context, info.Item1, info.Item2, DiagnosticSeverity.Info, description);
         }
 
-        public static void LogCompilerWarning(this GeneratorExecutionContext context, string errorCode, string message, string description = "")
+        public static void LogCompilerWarning(this ContextWrapper context, string errorCode, string message, string description = "")
         {
             Debug.LogWarning(context, $"{errorCode}: {message} {description}");
             LogCompilerMessage(context, errorCode, message, DiagnosticSeverity.Warning, description);
         }
 
-        public static void LogCompilerWarning(this GeneratorExecutionContext context, (string, string) warning, string description = "")
+        public static void LogCompilerWarning(this ContextWrapper context, (string, string) warning, string description = "")
         {
             Debug.LogWarning(context, $"{warning.Item1}: {warning.Item2} {description}");
             LogCompilerMessage(context, warning.Item1, warning.Item2, DiagnosticSeverity.Warning, description);
         }
 
-        public static void LogCompilerError(this GeneratorExecutionContext context, string errorCode, string message, string description = "")
+        public static void LogCompilerError(this ContextWrapper context, string errorCode, string message, string description = "")
         {
             Debug.LogError(context, $"{errorCode}: {message} {description}");
             LogCompilerMessage(context, errorCode, message, DiagnosticSeverity.Error, description);
         }
 
-        public static void LogCompilerError(this GeneratorExecutionContext context, (string, string) error)
+        public static void LogCompilerError(this ContextWrapper context, (string, string) error)
         {
             Debug.LogError(context, $"{error.Item1}: {error.Item2} ");
             LogCompilerMessage(context, error.Item1, error.Item2, DiagnosticSeverity.Error, "");
         }
 
-        public static void LogCompilerError(this GeneratorExecutionContext context, (string, string) error, Location location)
+        public static void LogCompilerError(this ContextWrapper context, (string, string) error, Location location)
         {
             Debug.LogError(context, $"{error.Item1}: {error.Item2} " + location);
             LogCompilerMessage(context, error.Item1, error.Item2, DiagnosticSeverity.Error, "", location);
         }
 
-        public static void LogCompilerErrorTooMuchDecorateArguments(this GeneratorExecutionContext context, ArgumentSyntax excessArg)
+        public static void LogCompilerErrorTooMuchDecorateArguments(this ContextWrapper context, ArgumentSyntax excessArg)
         {
             var error = CompilerMessages.TooMuchDecorateArguments;
 
@@ -142,7 +143,7 @@ namespace SourceGenerator.Logging
             LogCompilerMessage(context, error.Item1, error.Item2, DiagnosticSeverity.Error, "", excessArg.GetLocation());
         }
 
-        public static void LogCompilerErrorExpectedBoolIn3rdDecorateArgument(this GeneratorExecutionContext context, ArgumentSyntax notBoolArg, TypeInfo notBoolButThisType)
+        public static void LogCompilerErrorExpectedBoolIn3rdDecorateArgument(this ContextWrapper context, ArgumentSyntax notBoolArg, TypeInfo notBoolButThisType)
         {
             var error = CompilerMessages.ExpectedBoolIn3rdDecorateArgument;
 
@@ -153,7 +154,7 @@ namespace SourceGenerator.Logging
             LogCompilerMessage(context, error.Item1, desc, DiagnosticSeverity.Error, "", notBoolArg.GetLocation());
         }
 
-        public static void LogCompilerErrorMissingDecorateArguments(this GeneratorExecutionContext context, Location location)
+        public static void LogCompilerErrorMissingDecorateArguments(this ContextWrapper context, Location location)
         {
             var error = CompilerMessages.MissingDecorateArguments;
 
@@ -161,7 +162,7 @@ namespace SourceGenerator.Logging
             LogCompilerMessage(context, error.Item1, error.Item2, DiagnosticSeverity.Error, "", location);
         }
 
-        public static void LogCompilerErrorMissingDecoratePropertyName(this GeneratorExecutionContext context, ArgumentSyntax firstArgThatMustBeString, TypeInfo firstArgType)
+        public static void LogCompilerErrorMissingDecoratePropertyName(this ContextWrapper context, ArgumentSyntax firstArgThatMustBeString, TypeInfo firstArgType)
         {
             var error = CompilerMessages.MissingDecoratePropertyName;
 
@@ -172,7 +173,7 @@ namespace SourceGenerator.Logging
             LogCompilerMessage(context, error.Item1, desc, DiagnosticSeverity.Error, "", firstArgThatMustBeString.GetLocation());
         }
 
-        public static void LogCompilerErrorVoidType(this GeneratorExecutionContext context, Location location)
+        public static void LogCompilerErrorVoidType(this ContextWrapper context, Location location)
         {
             var error = CompilerMessages.CannotBeVoidError;
 
@@ -180,7 +181,7 @@ namespace SourceGenerator.Logging
             LogCompilerMessage(context, error.Item1, error.Item2, DiagnosticSeverity.Error, "", location);
         }
 
-        public static void LogCompilerErrorEnumUnsupported(this GeneratorExecutionContext context, Location location)
+        public static void LogCompilerErrorEnumUnsupported(this ContextWrapper context, Location location)
         {
             var error = CompilerMessages.EnumsUnsupportedError;
 
@@ -188,7 +189,7 @@ namespace SourceGenerator.Logging
             LogCompilerMessage(context, error.Item1, error.Item2, DiagnosticSeverity.Error, "", location);
         }
 
-        public static void LogCompilerErrorInvalidArgument(this GeneratorExecutionContext context, TypeInfo typeInfo, ExpressionSyntax exp)
+        public static void LogCompilerErrorInvalidArgument(this ContextWrapper context, TypeInfo typeInfo, ExpressionSyntax exp)
         {
             var error = CompilerMessages.InvalidArgument;
 
@@ -208,14 +209,14 @@ namespace SourceGenerator.Logging
             LogCompilerMessage(context, error.Item1, desc, DiagnosticSeverity.Error, "", location);
         }
 
-        public static void LogCompilerErrorCannotFitInFixedString(this GeneratorExecutionContext context, Location location)
+        public static void LogCompilerErrorCannotFitInFixedString(this ContextWrapper context, Location location)
         {
             var error = CompilerMessages.MessageFixedStringError;
             Debug.LogError(context, $"{error.Item1}: {error.Item2} {location}");
             LogCompilerMessage(context, error.Item1, error.Item2, DiagnosticSeverity.Error, "", location);
         }
 
-        public static void LogCompilerErrorFieldNameConflict(this GeneratorExecutionContext context, IFieldSymbol[] fields, string conflictingName)
+        public static void LogCompilerErrorFieldNameConflict(this ContextWrapper context, IFieldSymbol[] fields, string conflictingName)
         {
             var error = CompilerMessages.MessageErrorFieldNameConflict;
             var msg = string.Format(error.Item2, conflictingName);
@@ -236,13 +237,7 @@ namespace SourceGenerator.Logging
             LogCompilerMessage(context, error.Item1, msg, DiagnosticSeverity.Error, "", location);
         }
 
-        // When optional write to Temp folder fails
-        public static void LogCompilerWarningTempWriteException(this GeneratorExecutionContext context, Exception e, string filename)
-        {
-            Debug.LogException(context, e, $"While writing {filename}");
-        }
-
-        public static void LogCompilerWarningReferenceType(this GeneratorExecutionContext context, ExpressionSyntax expression)
+        public static void LogCompilerWarningReferenceType(this ContextWrapper context, ExpressionSyntax expression)
         {
             var warning = CompilerMessages.ReferenceError;
 
@@ -252,7 +247,17 @@ namespace SourceGenerator.Logging
             LogCompilerMessage(context, warning.Item1, desc, DiagnosticSeverity.Warning, "", location);
         }
 
-        public static void LogCompilerWarningEnumUnsupportedAsField(this GeneratorExecutionContext context, ExpressionSyntax expression, IFieldSymbol fieldSymbol)
+        public static void LogCompilerWarningOutputWriter(this ContextWrapper context, IFieldSymbol currFieldSymbol)
+        {
+            var warning = CompilerMessages.OutputWriterError;
+
+            var location = currFieldSymbol.Locations.Length == 0 ? null : currFieldSymbol.Locations[0];
+            var desc = $"{warning.Item2} : {currFieldSymbol}";
+            Debug.LogWarning(context, $"{warning.Item1}: {desc} {location}");
+            LogCompilerMessage(context, warning.Item1, desc, DiagnosticSeverity.Warning, "", location);
+        }
+
+        public static void LogCompilerWarningEnumUnsupportedAsField(this ContextWrapper context, ExpressionSyntax expression, IFieldSymbol fieldSymbol)
         {
             var warning = CompilerMessages.EnumsUnsupportedError;
 
@@ -262,21 +267,21 @@ namespace SourceGenerator.Logging
             LogCompilerMessage(context, warning.Item1, desc, DiagnosticSeverity.Warning, "", location);
         }
 
-        public static void LogCompilerErrorUnhandledException(this GeneratorExecutionContext context, Exception e)
+        public static void LogCompilerErrorUnhandledException(this ContextWrapper context, Exception e)
         {
             Debug.LogException(context, e);
             var error = CompilerMessages.GeneralException;
             LogCompilerMessage(context, error.Item1, error.Item2 + ": " + e, DiagnosticSeverity.Error, "", null);
         }
 
-        public static void LogCompilerWarningWrongArgumentsInWriteCall(this GeneratorExecutionContext context, InvocationExpressionSyntax invocation)
+        public static void LogCompilerWarningWrongArgumentsInWriteCall(this ContextWrapper context, InvocationExpressionSyntax invocation)
         {
             var warn = CompilerMessages.InvalidWriteCall;
             Debug.LogWarning(context, "Empty Write call ignored " + invocation.GetLocation());
             LogCompilerMessage(context, warn.Item1, warn.Item2, DiagnosticSeverity.Warning, "", invocation.GetLocation());
         }
 
-        public static void LogCompilerErrorCannotUseField(this GeneratorExecutionContext context, IFieldSymbol field, Location location = null)
+        public static void LogCompilerErrorCannotUseField(this ContextWrapper context, IFieldSymbol field, Location location = null)
         {
             if (location == null)
                 location = field.Locations.FirstOrDefault();
@@ -285,7 +290,7 @@ namespace SourceGenerator.Logging
             LogCompilerMessage(context, error.Item1, error.Item2, DiagnosticSeverity.Error, "", location);
         }
 
-        public static void LogCompilerErrorUnsupportedField(this GeneratorExecutionContext context, IFieldSymbol field,
+        public static void LogCompilerErrorUnsupportedField(this ContextWrapper context, IFieldSymbol field,
             Location location = null)
         {
             if (location == null)
@@ -297,12 +302,12 @@ namespace SourceGenerator.Logging
         }
 
         // literal message analysis messages
-        public static void LogCompilerLiteralMessage(this GeneratorExecutionContext context, string errorCode, string message, Location location)
+        public static void LogCompilerLiteralMessage(this ContextWrapper context, string errorCode, string message, Location location)
         {
             LogCompilerMessage(context, errorCode, message, DiagnosticSeverity.Warning, "", location);
         }
 
-        public static void LogCompilerLiteralMessageMissingArgForHole(this GeneratorExecutionContext context, string msg, Location location)
+        public static void LogCompilerLiteralMessageMissingArgForHole(this ContextWrapper context, string msg, Location location)
         {
             var warn = CompilerMessages.LiteralMessageMissingArgForHole;
             msg = string.Format(warn.Item2, msg);
@@ -310,7 +315,7 @@ namespace SourceGenerator.Logging
             LogCompilerMessage(context, warn.Item1, msg, DiagnosticSeverity.Warning, "", location);
         }
 
-        public static void LogCompilerLiteralMessageMissingHoleForArg(this GeneratorExecutionContext context, Location location)
+        public static void LogCompilerLiteralMessageMissingHoleForArg(this ContextWrapper context, Location location)
         {
             var warn = CompilerMessages.LiteralMessageMissingHoleForArg;
             var msg = warn.Item2;
@@ -318,7 +323,7 @@ namespace SourceGenerator.Logging
             LogCompilerMessage(context, warn.Item1, msg, DiagnosticSeverity.Warning, "", location);
         }
 
-        public static void LogCompilerLiteralMessageInvalidArgument(this GeneratorExecutionContext context, string msg, Location location)
+        public static void LogCompilerLiteralMessageInvalidArgument(this ContextWrapper context, string msg, Location location)
         {
             var warn = CompilerMessages.LiteralMessageInvalidArgument;
             msg = warn.Item2;
@@ -326,7 +331,7 @@ namespace SourceGenerator.Logging
             LogCompilerMessage(context, warn.Item1, msg, DiagnosticSeverity.Warning, "", location);
         }
 
-        public static void LogCompilerLiteralMessageMissingIndexArg(this GeneratorExecutionContext context, int missedIndx, Location location)
+        public static void LogCompilerLiteralMessageMissingIndexArg(this ContextWrapper context, int missedIndx, Location location)
         {
             var warn = CompilerMessages.LiteralMessageMissingIndexArg;
             var msg = string.Format(warn.Item2, missedIndx);
@@ -334,7 +339,7 @@ namespace SourceGenerator.Logging
             LogCompilerMessage(context, warn.Item1, msg, DiagnosticSeverity.Warning, "", location);
         }
 
-        public static void LogCompilerLiteralMessageRepeatingNamedArg(this GeneratorExecutionContext context, string msg, Location location)
+        public static void LogCompilerLiteralMessageRepeatingNamedArg(this ContextWrapper context, string msg, Location location)
         {
             var warn = CompilerMessages.LiteralMessageRepeatingNamedArg;
             msg = string.Format(warn.Item2, msg);
@@ -344,12 +349,12 @@ namespace SourceGenerator.Logging
 
         // ---------------------------------
 
-        private static void LogCompilerMessage(GeneratorExecutionContext context, string errorCode, string message, DiagnosticSeverity severity, string description = "")
+        private static void LogCompilerMessage(ContextWrapper context, string errorCode, string message, DiagnosticSeverity severity, string description = "")
         {
-            LogCompilerMessage(context, errorCode, message, severity, description, context.Compilation.SyntaxTrees.First().GetRoot().GetLocation());
+            LogCompilerMessage(context, errorCode, message, severity, description, context.DefaultLocation());
         }
 
-        private static void LogCompilerMessage(GeneratorExecutionContext context, string errorCode, string message, DiagnosticSeverity severity, string description, Location location)
+        private static void LogCompilerMessage(ContextWrapper context, string errorCode, string message, DiagnosticSeverity severity, string description, Location location)
         {
             // Unity shows:
             //  severity, error code, message and location.

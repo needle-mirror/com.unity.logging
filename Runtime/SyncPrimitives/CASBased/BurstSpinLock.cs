@@ -1,11 +1,4 @@
-#if UNITY_DOTSRUNTIME
-#define USE_BASELIB
-#define USE_BASELIB_FILEIO
-#endif
-
-#if USE_BASELIB
 //#define MARK_THREAD_OWNERS
-#endif
 
 #if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
 #define DEBUG_ADDITIONAL_CHECKS
@@ -102,9 +95,7 @@ namespace Unity.Logging
 
             while (System.Threading.Interlocked.CompareExchange(ref lockVar, threadId, 0) != 0)
             {
-#if USE_BASELIB
                 Baselib.LowLevel.Binding.Baselib_Thread_YieldExecution();
-#endif
             }
         }
 

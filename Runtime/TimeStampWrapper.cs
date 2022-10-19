@@ -11,11 +11,7 @@ using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine.Assertions;
 
-#if USE_BASELIB
 using TimeStampManager = Unity.Logging.Internal.TimeStampManagerBaselib;
-#else
-using TimeStampManager = Unity.Logging.Internal.TimeStampManagerManaged;
-#endif
 
 namespace Unity.Logging.Internal
 {

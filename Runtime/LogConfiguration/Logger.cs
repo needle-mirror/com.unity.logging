@@ -168,6 +168,7 @@ namespace Unity.Logging
         /// Get or create sink of type T
         /// </summary>
         /// <param name="sc">Configuration of the sink</param>
+        /// <typeparam name="T">SinkSystemBase</typeparam>
         /// <returns>Existing or created sink</returns>
         public T GetOrCreateSink<T>(SinkConfiguration sc) where T : SinkSystemBase
         {

@@ -7,7 +7,7 @@ namespace Unity.Logging.Internal
     /// <summary>
     /// FixedList4096Bytes{T} wrapped with read write spin lock
     /// </summary>
-    /// <typeparam name="T">unmanaged, IEquatable{T}</typeparam>
+    /// <typeparam name="T">Unmanaged, IEquatable{T}</typeparam>
     [BurstCompile]
     internal struct ThreadSafeList4096<T> where T : unmanaged, IEquatable<T>
     {

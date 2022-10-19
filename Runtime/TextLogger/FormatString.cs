@@ -8,6 +8,9 @@ using UnityEngine.Assertions;
 
 namespace Unity.Logging.Internal
 {
+    /// <summary>
+    /// Static class that formats arguments. Used by formatters
+    /// </summary>
     [BurstCompile]
     [Il2CppSetOption(Option.NullChecks, false)]
     [Il2CppSetOption(Option.ArrayBoundsChecks, false)]
@@ -382,6 +385,14 @@ namespace Unity.Logging.Internal
             return formatError;
         }
 
+        /// <summary>
+        /// Appends argument of type sbyte
+        /// </summary>
+        /// <param name="fs">UTF8 container where to append</param>
+        /// <param name="input">What to append</param>
+        /// <param name="arg">ArgumentInfo that user specified in the message</param>
+        /// <typeparam name="T">UTF8 container</typeparam>
+        /// <returns>FormatError if any happened</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static FormatError Append<T>(ref T fs, sbyte input, ref ArgumentInfo arg) where T : unmanaged, INativeList<byte>, IUTF8Bytes
         {
@@ -393,6 +404,14 @@ namespace Unity.Logging.Internal
             return AppendFormat(ref fs, ref numFormatter, ref numericFormatInfo, ref arg);
         }
 
+        /// <summary>
+        /// Appends argument of type byte
+        /// </summary>
+        /// <param name="fs">UTF8 container where to append</param>
+        /// <param name="input">What to append</param>
+        /// <param name="arg">ArgumentInfo that user specified in the message</param>
+        /// <typeparam name="T">UTF8 container</typeparam>
+        /// <returns>FormatError if any happened</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static FormatError Append<T>(ref T fs, byte input, ref ArgumentInfo arg) where T : unmanaged, INativeList<byte>, IUTF8Bytes
         {
@@ -404,12 +423,28 @@ namespace Unity.Logging.Internal
             return AppendFormat(ref fs, ref numFormatter, ref numericFormatInfo, ref arg);
         }
 
+        /// <summary>
+        /// Appends argument of type char
+        /// </summary>
+        /// <param name="fs">UTF8 container where to append</param>
+        /// <param name="input">What to append</param>
+        /// <param name="arg">ArgumentInfo that user specified in the message</param>
+        /// <typeparam name="T">UTF8 container</typeparam>
+        /// <returns>FormatError if any happened</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static FormatError Append<T>(ref T fs, char input, ref ArgumentInfo arg) where T : unmanaged, INativeList<byte>, IUTF8Bytes
         {
             return fs.Append(input);
         }
 
+        /// <summary>
+        /// Appends argument of type short
+        /// </summary>
+        /// <param name="fs">UTF8 container where to append</param>
+        /// <param name="input">What to append</param>
+        /// <param name="arg">ArgumentInfo that user specified in the message</param>
+        /// <typeparam name="T">UTF8 container</typeparam>
+        /// <returns>FormatError if any happened</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static FormatError Append<T>(ref T fs, short input, ref ArgumentInfo arg) where T : unmanaged, INativeList<byte>, IUTF8Bytes
         {
@@ -421,6 +456,14 @@ namespace Unity.Logging.Internal
             return AppendFormat(ref fs, ref numFormatter, ref numericFormatInfo, ref arg);
         }
 
+        /// <summary>
+        /// Appends argument of type ushort
+        /// </summary>
+        /// <param name="fs">UTF8 container where to append</param>
+        /// <param name="input">What to append</param>
+        /// <param name="arg">ArgumentInfo that user specified in the message</param>
+        /// <typeparam name="T">UTF8 container</typeparam>
+        /// <returns>FormatError if any happened</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static FormatError Append<T>(ref T fs, ushort input, ref ArgumentInfo arg) where T : unmanaged, INativeList<byte>, IUTF8Bytes
         {
@@ -432,6 +475,14 @@ namespace Unity.Logging.Internal
             return AppendFormat(ref fs, ref numFormatter, ref numericFormatInfo, ref arg);
         }
 
+        /// <summary>
+        /// Appends argument of type int
+        /// </summary>
+        /// <param name="fs">UTF8 container where to append</param>
+        /// <param name="input">What to append</param>
+        /// <param name="arg">ArgumentInfo that user specified in the message</param>
+        /// <typeparam name="T">UTF8 container</typeparam>
+        /// <returns>FormatError if any happened</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static FormatError Append<T>(ref T fs, int input, ref ArgumentInfo arg) where T : unmanaged, INativeList<byte>, IUTF8Bytes
         {
@@ -443,6 +494,14 @@ namespace Unity.Logging.Internal
             return AppendFormat(ref fs, ref numFormatter, ref numericFormatInfo, ref arg);
         }
 
+        /// <summary>
+        /// Appends argument of type uint
+        /// </summary>
+        /// <param name="fs">UTF8 container where to append</param>
+        /// <param name="input">What to append</param>
+        /// <param name="arg">ArgumentInfo that user specified in the message</param>
+        /// <typeparam name="T">UTF8 container</typeparam>
+        /// <returns>FormatError if any happened</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static FormatError Append<T>(ref T fs, uint input, ref ArgumentInfo arg) where T : unmanaged, INativeList<byte>, IUTF8Bytes
         {
@@ -454,6 +513,14 @@ namespace Unity.Logging.Internal
             return AppendFormat(ref fs, ref numFormatter, ref numericFormatInfo, ref arg);
         }
 
+        /// <summary>
+        /// Appends argument of type long
+        /// </summary>
+        /// <param name="fs">UTF8 container where to append</param>
+        /// <param name="input">What to append</param>
+        /// <param name="arg">ArgumentInfo that user specified in the message</param>
+        /// <typeparam name="T">UTF8 container</typeparam>
+        /// <returns>FormatError if any happened</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static FormatError Append<T>(ref T fs, long input, ref ArgumentInfo arg) where T : unmanaged, INativeList<byte>, IUTF8Bytes
         {
@@ -465,6 +532,14 @@ namespace Unity.Logging.Internal
             return AppendFormat(ref fs, ref numFormatter, ref numericFormatInfo, ref arg);
         }
 
+        /// <summary>
+        /// Appends argument of type ulong
+        /// </summary>
+        /// <param name="fs">UTF8 container where to append</param>
+        /// <param name="input">What to append</param>
+        /// <param name="arg">ArgumentInfo that user specified in the message</param>
+        /// <typeparam name="T">UTF8 container</typeparam>
+        /// <returns>FormatError if any happened</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static FormatError Append<T>(ref T fs, ulong input, ref ArgumentInfo arg) where T : unmanaged, INativeList<byte>, IUTF8Bytes
         {
@@ -476,30 +551,71 @@ namespace Unity.Logging.Internal
             return AppendFormat(ref fs, ref numFormatter, ref numericFormatInfo, ref arg);
         }
 
+        /// <summary>
+        /// Appends argument of type float
+        /// </summary>
+        /// <param name="fs">UTF8 container where to append</param>
+        /// <param name="input">What to append</param>
+        /// <param name="arg">ArgumentInfo that user specified in the message</param>
+        /// <typeparam name="T">UTF8 container</typeparam>
+        /// <returns>FormatError if any happened</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static FormatError Append<T>(ref T fs, float input, ref ArgumentInfo arg) where T : unmanaged, INativeList<byte>, IUTF8Bytes
         {
             return fs.Append(input);
         }
 
+        /// <summary>
+        /// Appends argument of type double
+        /// </summary>
+        /// <param name="fs">UTF8 container where to append</param>
+        /// <param name="input">What to append</param>
+        /// <param name="arg">ArgumentInfo that user specified in the message</param>
+        /// <typeparam name="T">UTF8 container</typeparam>
+        /// <returns>FormatError if any happened</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static FormatError Append<T>(ref T fs, double input, ref ArgumentInfo arg) where T : unmanaged, INativeList<byte>, IUTF8Bytes
         {
             return Append(ref fs, (float)input, ref arg); // TODO: add double support to com.unity.collections
         }
 
+        /// <summary>
+        /// Appends argument of type bool - 'True' or 'False'
+        /// </summary>
+        /// <param name="fs">UTF8 container where to append</param>
+        /// <param name="b">What to append</param>
+        /// <param name="arg">ArgumentInfo that user specified in the message</param>
+        /// <typeparam name="T">UTF8 container</typeparam>
+        /// <returns>FormatError if any happened</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static FormatError Append<T>(ref T fs, bool b, ref ArgumentInfo arg) where T : unmanaged, INativeList<byte>, IUTF8Bytes
         {
             return fs.Append(b ? (FixedString32Bytes)"True" : (FixedString32Bytes)"False");
         }
 
+        /// <summary>
+        /// Appends argument of type bool, low case - 'true' or 'false'
+        /// </summary>
+        /// <param name="fs">UTF8 container where to append</param>
+        /// <param name="b">What to append</param>
+        /// <param name="arg">ArgumentInfo that user specified in the message</param>
+        /// <typeparam name="T">UTF8 container</typeparam>
+        /// <returns>FormatError if any happened</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static FormatError AppendLowcase<T>(ref T fs, bool b, ref ArgumentInfo arg) where T : unmanaged, INativeList<byte>, IUTF8Bytes
         {
             return fs.Append(b ? (FixedString32Bytes)"true" : (FixedString32Bytes)"false");
         }
 
+        /// <summary>
+        /// Appends UTF8 argument
+        /// </summary>
+        /// <param name="fs">UTF8 container where to append</param>
+        /// <param name="input">UTF8 container to append</param>
+        /// <param name="arg">ArgumentInfo that user specified in the message</param>
+        /// <typeparam name="T">UTF8 container</typeparam>
+        /// <typeparam name="T2">UTF8 container</typeparam>
+        /// <returns>FormatError if any happened</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static FormatError Append<T,T2>(ref T fs, in T2 input, ref ArgumentInfo arg)
             where T : unmanaged, INativeList<byte>, IUTF8Bytes
@@ -509,13 +625,29 @@ namespace Unity.Logging.Internal
         }
     }
 
+    /// <summary>
+    /// Structure that stores integer argument
+    /// </summary>
     public readonly struct IntNumericFormatter
     {
+        /// <summary>
+        /// Storage for abs integer value
+        /// </summary>
         public readonly ulong number;
+        /// <summary>
+        /// Sign of the integer
+        /// </summary>
         public readonly byte sign;
+        /// <summary>
+        /// Amount of bytes in the integer
+        /// </summary>
         public readonly byte bytes;
 
-        public IntNumericFormatter(in long input)
+        /// <summary>
+        /// Creates from long
+        /// </summary>
+        /// <param name="input">Value</param>
+        public IntNumericFormatter(long input)
         {
             bytes = 8;
             if (input < 0)
@@ -529,14 +661,22 @@ namespace Unity.Logging.Internal
                 sign = 0;
             }
         }
-        public IntNumericFormatter(in ulong input)
+        /// <summary>
+        /// Creates from ulong
+        /// </summary>
+        /// <param name="input">Value</param>
+        public IntNumericFormatter(ulong input)
         {
             bytes = 8;
             sign = 0;
             number = input;
         }
 
-        public IntNumericFormatter(in int input)
+        /// <summary>
+        /// Creates from int
+        /// </summary>
+        /// <param name="input">Value</param>
+        public IntNumericFormatter(int input)
         {
             bytes = 4;
             if (input < 0)
@@ -550,14 +690,23 @@ namespace Unity.Logging.Internal
                 sign = 0;
             }
         }
-        public IntNumericFormatter(in uint input)
+
+        /// <summary>
+        /// Creates from uint
+        /// </summary>
+        /// <param name="input">Value</param>
+        public IntNumericFormatter(uint input)
         {
             bytes = 4;
             sign = 0;
             number = (ulong)input;
         }
 
-        public IntNumericFormatter(in short input)
+        /// <summary>
+        /// Creates from short
+        /// </summary>
+        /// <param name="input">Value</param>
+        public IntNumericFormatter(short input)
         {
             bytes = 2;
             if (input < 0)
@@ -571,14 +720,23 @@ namespace Unity.Logging.Internal
                 sign = 0;
             }
         }
-        public IntNumericFormatter(in ushort input)
+
+        /// <summary>
+        /// Creates from ushort
+        /// </summary>
+        /// <param name="input">Value</param>
+        public IntNumericFormatter(ushort input)
         {
             bytes = 2;
             sign = 0;
             number = (ulong)input;
         }
 
-        public IntNumericFormatter(in sbyte input)
+        /// <summary>
+        /// Creates from sbyte
+        /// </summary>
+        /// <param name="input">Value</param>
+        public IntNumericFormatter(sbyte input)
         {
             bytes = 1;
             if (input < 0)
@@ -592,15 +750,26 @@ namespace Unity.Logging.Internal
                 sign = 0;
             }
         }
-        public IntNumericFormatter(in byte input)
+        /// <summary>
+        /// Creates from byte
+        /// </summary>
+        /// <param name="input">Value</param>
+        public IntNumericFormatter(byte input)
         {
             bytes = 1;
             sign = 0;
             number = (ulong)input;
         }
 
+        /// <summary>
+        /// True if sign is minus
+        /// </summary>
         public bool IsNegative => sign == 1;
 
+        /// <summary>
+        /// Returns Signed number as it was used during creation of the struct
+        /// </summary>
+        /// <returns>Signed number as it was used during creation of the struct</returns>
         public long SignedNumber()
         {
             Assert.IsTrue(IsNegative);
@@ -621,35 +790,17 @@ namespace Unity.Logging.Internal
         }
     }
 
-    public readonly struct FloatNumericFormatter
-    {
-        enum FloatingPointFlags : byte
-        {
-            Normal,
-            Infinity,
-            NaN
-        }
-
-        public readonly float number;
-        public readonly byte sign;
-
-
-        public FloatNumericFormatter(in float input)
-        {
-            number = input;
-            if(input < 0)
-            {
-                sign = 1;
-            }
-            else
-            {
-                sign = 0;
-            }
-        }
-    }
-
+    /// <summary>
+    /// Utils for formatting arguments
+    /// </summary>
     public static class FormatStringUtils
     {
+        /// <summary>
+        /// Calculates amount of symbols to display integer in decimal
+        /// </summary>
+        /// <param name="integer">IntNumericFormatter for the integer</param>
+        /// <param name="withSign">True if minus should be displayed</param>
+        /// <returns>Amount of symbols to display integer in decimal</returns>
         public static int LengthDec(in IntNumericFormatter integer, bool withSign)
         {
             if (integer.number == 0)
@@ -670,6 +821,12 @@ namespace Unity.Logging.Internal
             return res;
         }
 
+        /// <summary>
+        /// Appends integer into a UTF8 string
+        /// </summary>
+        /// <param name="integer">integer representation of IntNumericFormatter</param>
+        /// <param name="dst">Destination where to write</param>
+        /// <param name="neededLength">Amount of symbols to write</param>
         public static unsafe void AppendDec(in IntNumericFormatter integer, byte* dst, int neededLength)
         {
             if (neededLength <= 0) return;
@@ -706,6 +863,12 @@ namespace Unity.Logging.Internal
             Assert.AreEqual(0, offset);
         }
 
+        /// <summary>
+        /// Calculates amount of symbols to display integer in hex
+        /// </summary>
+        /// <param name="integer">IntNumericFormatter for the integer</param>
+        /// <param name="withSign">Should include minus sign</param>
+        /// <returns>Amount of symbols to display integer in hex</returns>
         public static int LengthHex(in IntNumericFormatter integer, bool withSign)
         {
             if (integer.number == 0)
@@ -719,6 +882,13 @@ namespace Unity.Logging.Internal
             return res;
         }
 
+        /// <summary>
+        /// Appends integer in hex into a UTF8 string
+        /// </summary>
+        /// <param name="integer">integer representation of IntNumericFormatter</param>
+        /// <param name="dst">Destination where to write</param>
+        /// <param name="neededLength">Amount of symbols to write</param>
+        /// <param name="upperCase">Use upper case if true</param>
         public static unsafe void AppendHex(in IntNumericFormatter integer, byte* dst, int neededLength, bool upperCase)
         {
             if (neededLength <= 0) return;

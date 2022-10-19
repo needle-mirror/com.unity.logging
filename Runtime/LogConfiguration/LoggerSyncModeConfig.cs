@@ -1,5 +1,8 @@
 namespace Unity.Logging
 {
+    /// <summary>
+    /// Use to set the synchronization mode of the logger
+    /// </summary>
     public class LoggerSyncModeConfig
     {
         private SyncMode m_CurrentMode = SyncMode.FatalIsSync;

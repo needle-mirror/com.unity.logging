@@ -13,12 +13,12 @@ namespace SourceGenerator.Logging
 {
     internal static class Debug
     {
-        static TextWriter GetLogWriter(GeneratorExecutionContext ctx)
+        static TextWriter GetLogWriter(ContextWrapper ctx)
         {
             return Console.Out;
         }
 
-        public static void Log(GeneratorExecutionContext ctx, string level, string message)
+        public static void Log(ContextWrapper ctx, string level, string message)
         {
             using var _ = new Profiler.Auto("Debug.Log overhead");
             try
@@ -32,7 +32,7 @@ namespace SourceGenerator.Logging
             }
         }
 
-        public static void LogException(GeneratorExecutionContext ctx, Exception e, string message = null)
+        public static void LogException(ContextWrapper ctx, Exception e, string message = null)
         {
             using var _ = new Profiler.Auto("Debug.LogException overhead");
             try
@@ -54,27 +54,25 @@ namespace SourceGenerator.Logging
             }
         }
 
-        public static void LogInfo(GeneratorExecutionContext ctx, string message)
+        public static void LogInfo(ContextWrapper ctx, string message)
         {
-            Log(ctx, "Info", message);
+            //Log(ctx, "Info", message);
         }
 
-        public static void LogWarning(GeneratorExecutionContext ctx, string message)
+        public static void LogWarning(ContextWrapper ctx, string message)
         {
-            Log(ctx, "Warning", message);
+            //Log(ctx, "Warning", message);
         }
 
-        public static void LogError(GeneratorExecutionContext ctx, string message)
+        public static void LogError(ContextWrapper ctx, string message)
         {
-            Console.WriteLine($"Error: {message}");
-            Log(ctx, "Error", message);
+            //Log(ctx, "Error", message);
         }
 
         [Conditional("VERBOSE_LOGGING")]
-        public static void LogVerbose(GeneratorExecutionContext ctx, string message)
+        public static void LogVerbose(ContextWrapper ctx, string message)
         {
-            Console.WriteLine($"Error: {message}");
-            Log(ctx, "Verbose", message);
+            //Log(ctx, "Verbose", message);
         }
     }
 }

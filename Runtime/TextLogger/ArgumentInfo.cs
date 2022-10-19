@@ -1,6 +1,5 @@
 using System;
 using Unity.Collections;
-using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine.Assertions;
 
 namespace Unity.Logging
@@ -15,21 +14,59 @@ namespace Unity.Logging
         /// </summary>
         public enum DestructingType : byte
         {
+            /// <summary>
+            /// Not specified. Default
+            /// </summary>
             Default = 0,
-            Destructure, // @
-            Stringify    // $
+            /// <summary>
+            /// Represents the @ destructure operator
+            /// </summary>
+            Destructure,
+            /// <summary>
+            /// Represents the $ stringify operator
+            /// </summary>
+            Stringify
         }
 
+        /// <summary>
+        /// Type of the hole
+        /// </summary>
         public enum HoleType : byte
         {
+            /// <summary>
+            /// User named this one - not a built-in hole name
+            /// </summary>
             UserDefined,
+
+            /// <summary>
+            /// {Timestamp}
+            /// </summary>
             BuiltinTimestamp,
+
+            /// <summary>
+            /// {Level}
+            /// </summary>
             BuiltinLevel,
+
+            /// <summary>
+            /// {Stacktrace}
+            /// </summary>
             BuiltinStacktrace,
+
+            /// <summary>
+            /// {Message} used only in templates
+            /// </summary>
             BuiltinMessage,
 
-            BuiltinNewLine,   // reserved
-            BuiltinProperties // reserved
+            /// <summary>
+            /// {NewLine}
+            /// </summary>
+            BuiltinNewLine,
+
+            /// <summary>
+            /// {Properties}. Reserved
+            /// </summary>
+            BuiltinProperties
         }
 
         /// <summary>
@@ -58,13 +95,23 @@ namespace Unity.Logging
         public readonly FixedString512Bytes Format; // [^\{]+
 
         /// <summary>
-        /// True if created
+        /// Non-Zero if created
         /// </summary>
         public readonly byte IsValidByte;
+
+        /// <summary>
+        /// True if created
+        /// </summary>
         public bool IsValid => IsValidByte != 0;
 
+        /// <summary>
+        /// <see cref="HoleType"/> of this hole.
+        /// </summary>
         public readonly HoleType Type;
 
+        /// <summary>
+        /// True if the <see cref="HoleType"/> is not built-in, but user defined.
+        /// </summary>
         public bool IsBuiltIn => Type != HoleType.UserDefined;
 
         /// <summary>
@@ -77,7 +124,11 @@ namespace Unity.Logging
             return new ArgumentInfo(i);
         }
 
-        public ArgumentInfo(int index)
+        /// <summary>
+        /// Constructor for {0}, {3}, {42} type of holes
+        /// </summary>
+        /// <param name="index">Integer in the hole</param>
+        private ArgumentInfo(int index)
         {
             Index = index;
             IsValidByte = 1;
@@ -90,6 +141,14 @@ namespace Unity.Logging
             Type = HoleType.UserDefined;
         }
 
+        /// <summary>
+        /// Constructor of the <see cref="ArgumentInfo"/>
+        /// </summary>
+        /// <param name="index">Integer in the hole, like {0} or {42}, if not set see Name</param>
+        /// <param name="name">Name of the hole, like {thisIsName} or default if Index is used instead</param>
+        /// <param name="destructingType">@, $ or default</param>
+        /// <param name="format">Format - custom string after :</param>
+        /// <param name="alignment">Integer after comma, before :</param>
         public ArgumentInfo(int index, FixedString512Bytes name, DestructingType destructingType, FixedString512Bytes format, int alignment)
         {
             Index = index;
@@ -116,20 +175,27 @@ namespace Unity.Logging
             IsValidByte = 1;
         }
 
-        public static unsafe ArgumentInfo ParseArgument(byte* rawMsgBuffer, int rawMsgBufferLength, in ParseSegment currArgSlot)
+        /// <summary>
+        /// Parses <see cref="ArgumentInfo"/> from UTF8 string's segment
+        /// </summary>
+        /// <param name="rawMsgBuffer">Pointer to UTF8 string</param>
+        /// <param name="rawMsgBufferLength">Full length of the UTF8 string</param>
+        /// <param name="currArgSegment">Segment to parse inside the UTF8 string</param>
+        /// <returns>Parsed ArgumentInfo or default if error occured</returns>
+        public static unsafe ArgumentInfo ParseArgument(byte* rawMsgBuffer, int rawMsgBufferLength, in ParseSegment currArgSegment)
         {
-            if (rawMsgBufferLength == 0 || currArgSlot.Length <= 2 || currArgSlot.OffsetEnd > rawMsgBufferLength)
+            if (rawMsgBufferLength == 0 || currArgSegment.Length <= 2 || currArgSegment.OffsetEnd > rawMsgBufferLength)
                 return default;
 
 #if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
-            Assert.AreEqual((byte)'{', rawMsgBuffer[currArgSlot.Offset]);
-            Assert.AreEqual((byte)'}', rawMsgBuffer[currArgSlot.Offset + currArgSlot.Length - 1]);
+            Assert.AreEqual((byte)'{', rawMsgBuffer[currArgSegment.Offset]);
+            Assert.AreEqual((byte)'}', rawMsgBuffer[currArgSegment.Offset + currArgSegment.Length - 1]);
 #endif
 
-            if (currArgSlot.Length == 3)
+            if (currArgSegment.Length == 3)
             {
                 // fast track for {0}, {1}, ... {9}
-                var c = rawMsgBuffer[currArgSlot.Offset + 1];
+                var c = rawMsgBuffer[currArgSegment.Offset + 1];
                 if (c >= '0' && c <= '9')
                 {
                     return Number(c - '0');
@@ -137,9 +203,9 @@ namespace Unity.Logging
             }
 
             var rawString = new FixedString512Bytes();
-            rawString.Append(&rawMsgBuffer[currArgSlot.Offset], currArgSlot.Length);
+            rawString.Append(&rawMsgBuffer[currArgSegment.Offset], currArgSegment.Length);
 
-            var bodySegment = ParseSegment.Reduce(currArgSlot, 1, 1);
+            var bodySegment = ParseSegment.Reduce(currArgSegment, 1, 1);
 
             DestructingType destructingType = DestructingType.Default;
 
@@ -210,7 +276,7 @@ namespace Unity.Logging
             var alignment = 0;
             if (alignmentSegment.IsValid)
             {
-                var rawStringLocalAlignmentSegment = ParseSegment.Local(currArgSlot, alignmentSegment);
+                var rawStringLocalAlignmentSegment = ParseSegment.Local(currArgSegment, alignmentSegment);
 
                 var alignmentSegmentParseOffset = rawStringLocalAlignmentSegment.Offset;
 
@@ -229,7 +295,7 @@ namespace Unity.Logging
             if (bodySegmentNewEnd < bodySegmentEnd)
                 bodySegment = ParseSegment.LeftPart(bodySegment, bodySegmentNewEnd);
 
-            var rawStringLocalNameSegment = ParseSegment.Local(currArgSlot, bodySegment);
+            var rawStringLocalNameSegment = ParseSegment.Local(currArgSegment, bodySegment);
 
             FixedString512Bytes name = default;
             var index = 0;
@@ -267,15 +333,6 @@ namespace Unity.Logging
             return new ArgumentInfo(index, name, destructingType, format, alignment);
         }
 
-        public static int RetrieveContextArgumentIndex(in NativeArray<byte> msgBuffer, in ParseSegment argSlotSegment, bool isThisTemplate)
-        {
-            unsafe
-            {
-                var rawBuffer = (byte*)NativeArrayUnsafeUtility.GetUnsafeBufferPointerWithoutChecks(msgBuffer);
-                return RetrieveContextArgumentIndex(in rawBuffer, in argSlotSegment, isThisTemplate);
-            }
-        }
-
         private static int RetrieveContextArgumentIndex(in ArgumentInfo arg, bool isThisTemplate)
         {
             if (arg.IsValid == false)
@@ -309,6 +366,13 @@ namespace Unity.Logging
             }
         }
 
+        /// <summary>
+        /// Returns an index of the context argument to use in WriteMessage or builtin code
+        /// </summary>
+        /// <param name="rawBuffer">Pointer to argument UTF8 string</param>
+        /// <param name="argSlotSegment">Segment inside the UTF8 string</param>
+        /// <param name="isThisTemplate">True if this is a template (so {Message} is valid)</param>
+        /// <returns>Index of the context argument to use in WriteMessage or builtin code</returns>
         public static unsafe int RetrieveContextArgumentIndex(in byte* rawBuffer, in ParseSegment argSlotSegment, bool isThisTemplate)
         {
             var arg = ArgumentInfo.ParseArgument(rawBuffer, argSlotSegment.OffsetEnd, argSlotSegment);
@@ -316,11 +380,34 @@ namespace Unity.Logging
             return RetrieveContextArgumentIndex(arg, isThisTemplate);
         }
 
+        /// <summary>
+        /// Builtin code for the timestamp context argument
+        /// </summary>
         public const int BuiltInTimestampId = -100;
+
+        /// <summary>
+        /// Builtin code for the level context argument
+        /// </summary>
         public const int BuiltInLevelId = -101;
+
+        /// <summary>
+        /// Builtin code for the message context argument
+        /// </summary>
         public const int BuiltInMessage = -102;
+
+        /// <summary>
+        /// Builtin code for the stacktrace context argument
+        /// </summary>
         public const int BuiltInStackTrace = -103;
+
+        /// <summary>
+        /// Builtin code for the newline context argument
+        /// </summary>
         public const int BuiltInNewLine = -104;
+
+        /// <summary>
+        /// Builtin code for the properties context argument
+        /// </summary>
         public const int BuiltInProperties = -105;
     }
 }

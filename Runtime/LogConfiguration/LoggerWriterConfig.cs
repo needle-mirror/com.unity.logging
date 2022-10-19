@@ -27,6 +27,11 @@ namespace Unity.Logging
             return m_Config;
         }
 
+        /// <summary>
+        /// Resolves default setting for stack trace capture
+        /// </summary>
+        /// <param name="captureStackTrace">If this is null - default config's setting is used</param>
+        /// <returns>Returns capture stack trace setting for this config</returns>
         public bool ResolveCaptureStackTrace(bool? captureStackTrace)
         {
             if (captureStackTrace == null)
@@ -34,6 +39,11 @@ namespace Unity.Logging
             return captureStackTrace.Value;
         }
 
+        /// <summary>
+        /// Resolves default setting for minimal log level
+        /// </summary>
+        /// <param name="minLevel">If this is null - default config's setting is used</param>
+        /// <returns>Returns minimal logging message setting for this config</returns>
         public LogLevel ResolveMinLevel(LogLevel? minLevel)
         {
             if (minLevel == null)
@@ -41,6 +51,11 @@ namespace Unity.Logging
             return minLevel.Value;
         }
 
+        /// <summary>
+        /// Resolves default setting for output template
+        /// </summary>
+        /// <param name="outputTemplate">If this is null - default config's setting is used</param>
+        /// <returns>Returns output template setting for this config</returns>
         public FixedString512Bytes ResolveOutputTemplate(FixedString512Bytes? outputTemplate)
         {
             if (outputTemplate == null)

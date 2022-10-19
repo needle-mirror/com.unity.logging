@@ -7,22 +7,10 @@ namespace SourceGenerator.Logging.Declarations
 {
     public class OutputPaths
     {
-        // Define to use "alternate" output path for source generation (when using outside of Unity project)
-#if UNITY_LOGGING_STANDALONE_VS_PROJECT
-        public const string SourceGenRootFolderPath = @"./";
-#elif UNITY_LOGGING_GENERATE_TO_ASSETS_FOLDER
-        public const string SourceGenOutputFolderPath = @"../../../../../Assets/LoggingGenerated";
-#else
-        public const string SourceGenOutputFolderPath = @"../../../../../Temp/LoggingGenerated";
-#endif
-
         public const string SourceGenTextLoggerTypesFileName = "TextLoggerTypes_Gen.cs";
+        public const string SourceGenTextLoggerUserTypesFileName = "TextLoggerUserTypes_Gen.cs";
         public const string SourceGenTextLoggerMethodsFileName = "TextLoggerMethods_Gen.cs";
         public const string SourceGenTextLoggerParserFileName = "TextLoggerParser_Gen.cs";
-
-        public static string GeneratedTypesPath(string assemblyName) => Path.Combine(SourceGenOutputFolderPath, assemblyName, SourceGenTextLoggerTypesFileName);
-        public static string GeneratedMethodsPath(string assemblyName) => Path.Combine(SourceGenOutputFolderPath, assemblyName, SourceGenTextLoggerMethodsFileName);
-        public static string GeneratedParserPath(string assemblyName) => Path.Combine(SourceGenOutputFolderPath, assemblyName, SourceGenTextLoggerParserFileName);
     }
 
     public class CompilerMessages
@@ -75,6 +63,7 @@ namespace SourceGenerator.Logging.Declarations
 #pragma warning disable 0168 // variable declared but not used.
 #pragma warning disable 0219 // variable assigned but not used.
 #pragma warning disable 0414 // private field assigned but not used.
+#pragma warning disable 0436 // Type 'Log' conflicts with another one in case of InternalVisibleTo
 ";
 
         /// <summary>
@@ -85,6 +74,7 @@ namespace SourceGenerator.Logging.Declarations
 #pragma warning restore 0168 // variable declared but not used.
 #pragma warning restore 0219 // variable assigned but not used.
 #pragma warning restore 0414 // private field assigned but not used.
+#pragma warning restore 0436 // Type 'Log' conflicts with another one in case of InternalVisibleTo
 ";
 
         public static readonly string[] StdIncludes = new[]

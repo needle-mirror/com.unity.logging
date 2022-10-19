@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using LoggingCommon;
 
 namespace SourceGenerator.Logging
 {
@@ -11,7 +12,7 @@ namespace SourceGenerator.Logging
 
         private const string TextLoggerStructTypeFieldName = @"__Internal_Unity_TextLogger_Struct_TypeId__";
 
-        public LogStructureTypesData(List<LogStructureDefinitionData> structTypes)
+        public LogStructureTypesData(ContextWrapper ctx, List<LogStructureDefinitionData> structTypes)
         {
             StructTypes = structTypes;
 
@@ -20,12 +21,26 @@ namespace SourceGenerator.Logging
             // used in any of the user's structs we'll append a GUID to it and check again, until a unique name is found.
             //
             // NOTE: Only Fields from the user structs are reproduced within the internal generated structs; Properties, Methods, etc. aren't
-            // transfered over and therefore a conflict with these other identifiers isn't possible.
+            // transferred over and therefore a conflict with these other identifiers isn't possible.
 
             const string baseName = TextLoggerStructTypeFieldName;
             var candidateName = baseName;
             bool conflict;
             var iteration = 0;
+
+            // unique typeId validation
+            // var uniqTypeIds = structTypes.Select(s => s.TypeId).Distinct().Count();
+            // if (structTypes.Count != uniqTypeIds)
+            // {
+            //     foreach (var t in structTypes)
+            //     {
+            //         var c = structTypes.Where(s => s.TypeId == t.TypeId).ToArray();
+            //         if (c.Length > 1)
+            //         {
+            //             ctx.LogCompilerWarning("Internal01", $"not Uniq TypeId: {string.Join(", ", c.Select(s => $"{s.FullTypeName}. typeId = {s.TypeId}. localId = {s.LocalId}. user.TypeId = {s.UserDefinedMirrorStruct.TypeId}"))}");
+            //         }
+            //     }
+            // }
 
             do
             {

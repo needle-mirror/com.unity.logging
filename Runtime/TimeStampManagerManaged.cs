@@ -10,6 +10,9 @@ using Unity.Burst;
 
 namespace Unity.Logging.Internal
 {
+    /// <summary>
+    /// Timestamp logic controlled by DateTime + Stopwatch
+    /// </summary>
     [HideInStackTrace]
     public static class TimeStampManagerManaged
     {
@@ -41,6 +44,10 @@ namespace Unity.Logging.Internal
             return TimeStampWrapper.DateTimeTicksToNanosec( s_StopwatchStartTime.Add(s_Stopwatch.Elapsed).Ticks );
         }
 
+        /// <summary>
+        /// Returns current timestamp
+        /// </summary>
+        /// <returns>UTC timestamp in nanoseconds</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static long GetTimeStamp()
         {

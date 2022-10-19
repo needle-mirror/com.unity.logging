@@ -1,13 +1,6 @@
 //#define DEBUG_DEADLOCKS
 
-#if UNITY_DOTSRUNTIME
-#define USE_BASELIB
-#define USE_BASELIB_FILEIO
-#endif
-
-#if USE_BASELIB
 //#define MARK_THREAD_OWNERS
-#endif
 
 #if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
 #define DEBUG_ADDITIONAL_CHECKS
@@ -47,9 +40,7 @@ namespace Unity.Logging
 
             while (System.Threading.Interlocked.CompareExchange(ref lockVar, threadId, 0) != 0)
             {
-#if USE_BASELIB
                 Baselib.LowLevel.Binding.Baselib_Thread_YieldExecution();
-#endif
             }
 
 #if DEBUG_DEADLOCKS
@@ -59,9 +50,7 @@ namespace Unity.Logging
             // while we have readers
             while (Interlocked.Read(ref readersVar) != 0)
             {
-#if USE_BASELIB
                 Baselib.LowLevel.Binding.Baselib_Thread_YieldExecution();
-#endif
 
 #if DEBUG_DEADLOCKS
                 if (++deadlockGuard == 512)
@@ -118,9 +107,7 @@ namespace Unity.Logging
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void EnterRead(ref long lockVar, ref long readersVar)
         {
-#if USE_BASELIB
             BurstSpinLockCheckFunctions.CheckForRecursiveLock(ref lockVar);
-#endif
 
             for (;;)
             {
@@ -138,9 +125,7 @@ namespace Unity.Logging
                 // while it is locked - spin
                 while (Interlocked.Read(ref lockVar) != 0)
                 {
-#if USE_BASELIB
                     Baselib.LowLevel.Binding.Baselib_Thread_YieldExecution();
-#endif
                 }
             }
         }

@@ -1,11 +1,6 @@
-#if UNITY_DOTSRUNTIME
-#define USE_BASELIB
-#define USE_BASELIB_FILEIO
-#endif
 
 //#define LOGGING_FILE_OPS_DEBUG
 
-#if USE_BASELIB_FILEIO
 using System;
 using Unity.Baselib.LowLevel;
 using Unity.Collections;
@@ -44,7 +39,7 @@ namespace Unity.Logging.Sinks
             return result;
         }
 
-        public unsafe bool Write(IntPtr fileHandle, byte* data, ulong length, ulong* offsetPtr, ref FixedString4096Bytes absFilePath)
+        public unsafe bool Write(IntPtr fileHandle, byte* data, ulong length, ulong* offsetPtr)
         {
             var handle = new Binding.Baselib_FileIO_SyncFile { handle = fileHandle };
 
@@ -54,7 +49,7 @@ namespace Unity.Logging.Sinks
 
 #if LOGGING_FILE_OPS_DEBUG
             if (success == false)
-                UnityEngine.Debug.Log(string.Format("Write {1} {0} failed. error = {2}", fileHandle.ToInt64(), absFilePath, error.code));
+                UnityEngine.Debug.Log(string.Format("Write {0} failed. error = {1}", fileHandle.ToInt64(), error.code));
 #endif
             return success;
         }
@@ -74,7 +69,7 @@ namespace Unity.Logging.Sinks
 #endif
         }
 
-        public void CloseFile(IntPtr fileHandle, ref FixedString4096Bytes absFilePath)
+        public void CloseFile(IntPtr fileHandle)
         {
             var error = new Binding.Baselib_ErrorState();
             var handle = new Binding.Baselib_FileIO_SyncFile { handle = fileHandle };
@@ -85,10 +80,9 @@ namespace Unity.Logging.Sinks
                 Binding.Baselib_FileIO_SyncClose(handle, &error);
                 var e3 = error.code;
 #if LOGGING_FILE_OPS_DEBUG
-                UnityEngine.Debug.Log(string.Format("Closing {1} {0}. errors = {2},{3}", fileHandle.ToInt64(), absFilePath, e2, e3));
+                UnityEngine.Debug.Log(string.Format("Closing {0}. errors = {1},{2}", fileHandle.ToInt64(), e2, e3));
 #endif
             }
         }
     }
 }
-#endif

@@ -1,8 +1,3 @@
-#if UNITY_DOTSRUNTIME
-#define USE_BASELIB
-#define USE_BASELIB_FILEIO
-#endif
-
 // #if PLATFORM_SWITCH
 // #define FILESINK_IN_MEMORY
 // #endif
@@ -17,21 +12,17 @@ using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
 
-#if !USE_BASELIB_FILEIO
-using System.Threading.Tasks;
-using UnityEngine.Assertions;
-#endif
-
 #if FILESINK_IN_MEMORY
 using FileOperations = Unity.Logging.Sinks.FileRollingLogic<Unity.Logging.Sinks.FileOperationsInMemory>;
-#elif USE_BASELIB_FILEIO
-using FileOperations = Unity.Logging.Sinks.FileRollingLogic<Unity.Logging.Sinks.FileOperationsBaselib>;
 #else
-using FileOperations = Unity.Logging.Sinks.FileRollingLogic<Unity.Logging.Sinks.FileOperationsFileStream>;
+using FileOperations = Unity.Logging.Sinks.FileRollingLogic<Unity.Logging.Sinks.FileOperationsBaselib>;
 #endif
 
 namespace Unity.Logging.Sinks
 {
+    /// <summary>
+    /// Extension class for LoggerWriterConfig .File
+    /// </summary>
     public static class FileSinkSystemExt
     {
         /// <summary>
@@ -58,18 +49,36 @@ namespace Unity.Logging.Sinks
         }
     }
 
+    /// <summary>
+    /// File sink class
+    /// </summary>
     [BurstCompile]
     public class FileSinkSystem : SinkSystemBase
     {
+        /// <summary>
+        /// General configuration
+        /// </summary>
         public struct GeneralSinkConfiguration
         {
+            /// <summary>
+            /// String that should be added to any file at the beginning
+            /// </summary>
             public FixedString4096Bytes Prefix;
+
+            /// <summary>
+            /// String that should be added between each logging message
+            /// </summary>
             public FixedString64Bytes Separator;
+
+            /// <summary>
+            /// String that should be added to any file at the end
+            /// </summary>
             public FixedString4096Bytes Postfix;
 
             /// <summary>
             /// Whole file is a json array, elements separated with comma
             /// </summary>
+            /// <returns>GeneralSinkConfiguration that describes JSON array setup</returns>>
             public static GeneralSinkConfiguration JsonArray()
             {
                 return new GeneralSinkConfiguration
@@ -83,6 +92,7 @@ namespace Unity.Logging.Sinks
             /// <summary>
             /// Each line is a JSON object
             /// </summary>
+            /// <returns>GeneralSinkConfiguration that describes JSON lines setup</returns>>
             public static GeneralSinkConfiguration JsonLines()
             {
                 return new GeneralSinkConfiguration
@@ -94,25 +104,65 @@ namespace Unity.Logging.Sinks
             }
         }
 
+        /// <summary>
+        /// Current file state
+        /// </summary>
         public struct CurrentFileConfiguration
         {
+            /// <summary>
+            /// Absolute file path, without extension
+            /// </summary>
             public FixedString4096Bytes AbsFileName;
+            /// <summary>
+            /// File extension
+            /// </summary>
             public FixedString32Bytes FileExt;
         }
 
+        /// <summary>
+        /// Current rolling file state
+        /// </summary>
         public struct RollingFileConfiguration
         {
+            /// <summary>
+            /// Max file size in bytes that is allowed. 0 if no rolling should occur on the size of file
+            /// </summary>
             public long MaxFileSizeBytes;
+            /// <summary>
+            /// Max time span for a file to be opened. Default if no rolling should occur on the time
+            /// </summary>
             public TimeSpan MaxTimeSpan;
+            /// <summary>
+            /// Max number of rolls
+            /// </summary>
             public int MaxRoll;
         }
 
+        /// <summary>
+        /// Configuration for file sink
+        /// </summary>
         public class Configuration : SinkConfiguration
         {
+            /// <summary>
+            /// Instance of <see cref="GeneralSinkConfiguration"/>
+            /// </summary>
             public GeneralSinkConfiguration GeneralConfig;
+
+            /// <summary>
+            /// Instance of <see cref="CurrentFileConfiguration"/>
+            /// </summary>
             public CurrentFileConfiguration CurrentFileConfig;
+
+            /// <summary>
+            /// Instance of <see cref="RollingFileConfiguration"/>
+            /// </summary>
             public RollingFileConfiguration RollingFileConfig;
 
+            /// <summary>
+            /// Creates the FileSink
+            /// </summary>
+            /// <param name="logger">Logger that owns sink</param>
+            /// <returns>SinkSystemBase</returns>
             public override SinkSystemBase CreateSinkInstance(Logger logger) => CreateAndInitializeSinkInstance<FileSinkSystem>(logger, this);
 
             /// <summary>
@@ -127,7 +177,6 @@ namespace Unity.Logging.Sinks
             /// <param name="captureStackTrace">True if stack traces should be captured</param>
             /// <param name="minLevel">Minimal level of logs for this particular sink. Null if common level should be used</param>
             /// <param name="outputTemplate">Output message template for this particular sink. Null if common template should be used</param>
-            /// <returns>Logger config</returns>
             public Configuration(LoggerWriterConfig writeTo,
                                  string absFileName,
                                  FormatterStruct formatter = default,
@@ -163,6 +212,9 @@ namespace Unity.Logging.Sinks
             }
         }
 
+        /// <summary>
+        /// True if can access real file system, false if the virtual one
+        /// </summary>
         public static bool HasFileAccess
         {
             get
@@ -178,6 +230,10 @@ namespace Unity.Logging.Sinks
         internal static FileOperations CreateFileOperations() => new FileOperations();
         internal static FileOperations CreateFileOperations(IntPtr userData) => new FileOperations(userData);
 
+        /// <summary>
+        /// Creates <see cref="LogController.SinkStruct"/>
+        /// </summary>
+        /// <returns>SinkStruct</returns>
         public override LogController.SinkStruct ToSinkStruct()
         {
             var userData = CreateFileOperations();

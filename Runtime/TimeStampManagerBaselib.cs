@@ -1,5 +1,3 @@
-#if USE_BASELIB
-
 using System;
 using System.Runtime.CompilerServices;
 using Unity.Baselib.LowLevel;
@@ -7,6 +5,9 @@ using Unity.Burst;
 
 namespace Unity.Logging.Internal
 {
+    /// <summary>
+    /// Timestamp logic controlled by baselib
+    /// </summary>
     [HideInStackTrace]
     public static class TimeStampManagerBaselib
     {
@@ -25,6 +26,10 @@ namespace Unity.Logging.Internal
             s_TimestampStartTimeNanosec.Data = TimeStampWrapper.DateTimeTicksToNanosec( DateTime.UtcNow.Ticks ) - (long)(Binding.Baselib_Timer_GetTimeSinceStartupInSeconds() * Binding.Baselib_NanosecondsPerSecond);
         }
 
+        /// <summary>
+        /// Returns current timestamp
+        /// </summary>
+        /// <returns>UTC timestamp in nanoseconds</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static long GetTimeStamp()
         {
@@ -32,5 +37,3 @@ namespace Unity.Logging.Internal
         }
     }
 }
-
-#endif

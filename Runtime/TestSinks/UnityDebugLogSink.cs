@@ -14,8 +14,20 @@ using Unity.Logging.Sinks;
 
 namespace Unity.Logging.Sinks
 {
+    /// <summary>
+    /// Extension class for LoggerWriterConfig .UnityDebugLog
+    /// </summary>
     public static class UnityDebugLogSinkExt
     {
+        /// <summary>
+        /// Write logs with UnityEngine.Debug.Log. Used for debugging or for compatibility
+        /// </summary>
+        /// <param name="writeTo">Logger config</param>
+        /// <param name="formatter">Formatter that should be used by this sink. Text is default</param>
+        /// <param name="captureStackTrace">True if stack traces should be captured</param>
+        /// <param name="minLevel">Minimal level of logs for this particular sink. Null if common level should be used</param>
+        /// <param name="outputTemplate">Output message template for this particular sink. Null if common template should be used</param>
+        /// <returns>Logger config</returns>
         public static LoggerConfig UnityDebugLog(this LoggerWriterConfig writeTo,
                                                  FormatterStruct formatter = default,
                                                  bool? captureStackTrace = null,
@@ -29,19 +41,42 @@ namespace Unity.Logging.Sinks
         }
     }
 
+    /// <summary>
+    /// Unity Debug.Log sink class
+    /// </summary>
     [BurstCompile]
     public class UnityDebugLogSink : SinkSystemBase
     {
+        /// <summary>
+        /// Configuration for Unity Debug.Log sink
+        /// </summary>
         public class Configuration : SinkConfiguration
         {
+            /// <summary>
+            /// Creates the UnityDebugLogSink
+            /// </summary>
+            /// <param name="logger">Logger that owns sink</param>
+            /// <returns>SinkSystemBase</returns>
             public override SinkSystemBase CreateSinkInstance(Logger logger) => CreateAndInitializeSinkInstance<UnityDebugLogSink>(logger, this);
 
+            /// <summary>
+            /// Constructor for the configuration
+            /// </summary>
+            /// <param name="writeTo">Logger config</param>
+            /// <param name="formatter">Formatter that should be used by this sink. Text is default</param>
+            /// <param name="captureStackTraceOverride">True if stack traces should be captured. Null if default</param>
+            /// <param name="minLevelOverride">Minimal level of logs for this particular sink. Null if common level should be used</param>
+            /// <param name="outputTemplateOverride">Output message template for this particular sink. Null if common template should be used</param>
             public Configuration(LoggerWriterConfig writeTo, FormatterStruct formatter,
                                  bool? captureStackTraceOverride = null, LogLevel? minLevelOverride = null, FixedString512Bytes? outputTemplateOverride = null)
                 : base(writeTo, formatter, captureStackTraceOverride, minLevelOverride, outputTemplateOverride)
             {}
         }
 
+        /// <summary>
+        /// Creates <see cref="LogController.SinkStruct"/>
+        /// </summary>
+        /// <returns>SinkStruct</returns>
         public override LogController.SinkStruct ToSinkStruct()
         {
             var s = base.ToSinkStruct();
@@ -67,6 +102,11 @@ namespace Unity.Logging.Sinks
             }
         }
 
+        /// <summary>
+        /// Initialization of the sink using <see cref="Logger"/> and <see cref="SinkConfiguration"/> of this Sink
+        /// </summary>
+        /// <param name="logger">Logger that owns the sink</param>
+        /// <param name="systemConfig">Configuration</param>
         public override void Initialize(Logger logger, SinkConfiguration systemConfig)
         {
             ManagedUnityEngineDebugLogWrapper.Initialize();

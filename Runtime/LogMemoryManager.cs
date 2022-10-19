@@ -138,6 +138,18 @@ namespace Unity.Logging
         public bool IsOverflowBufferEnabled => OverflowBufferSize > 0;
 
         /// <summary>
+        /// Get default settings
+        /// </summary>
+        public static LogMemoryManagerParameters Default
+        {
+            get
+            {
+                GetDefaultParameters(out var result);
+                return result;
+            }
+        }
+
+        /// <summary>
         /// Creates a <see cref="LogMemoryManagerParameters"/> instance holding default values.
         /// </summary>
         /// <param name="defaultParams">Returned instance</param>
@@ -153,6 +165,37 @@ namespace Unity.Logging
                 BufferShrinkFactor = DefaultBufferShrinkFactor,
                 OverflowBufferSize = DefaultOverflowBufferSize,
                 DispatchQueueSize = DefaultDispatchQueueSize
+            };
+        }
+
+        /// <summary>
+        /// Get heavy load settings
+        /// </summary>
+        public static LogMemoryManagerParameters HeavyLoad
+        {
+            get
+            {
+                GetHeavyLoadParameters(out var result);
+                return result;
+            }
+        }
+
+        /// <summary>
+        /// Creates a <see cref="LogMemoryManagerParameters"/> instance holding heavy-load-case values.
+        /// </summary>
+        /// <param name="defaultParams">Returned instance</param>
+        public static void GetHeavyLoadParameters(out LogMemoryManagerParameters defaultParams)
+        {
+            defaultParams = new LogMemoryManagerParameters
+            {
+                InitialBufferCapacity = DefaultBufferCapacity * 64,
+                BufferSampleCount = DefaultBufferSampleCount,
+                BufferGrowThreshold = DefaultBufferGrowThreshold,
+                BufferShrinkThreshold = DefaultBufferShrinkThreshold,
+                BufferGrowFactor = DefaultBufferGrowFactor,
+                BufferShrinkFactor = DefaultBufferShrinkFactor,
+                OverflowBufferSize = DefaultOverflowBufferSize * 32,
+                DispatchQueueSize = DefaultDispatchQueueSize * 32
             };
         }
     }
@@ -276,7 +319,7 @@ namespace Unity.Logging
         internal const int InitialBufferLockMapCapacity = 40;
 
         /// <summary>
-        /// Parameter values provided to <see cref="LogMemoryManager.Initialize"/>.
+        /// Parameter values provided to <see cref="Initialize(LogMemoryManagerParameters)"/>.
         /// </summary>
         public LogMemoryManagerParameters Parameters => m_BufferParams;
 
@@ -643,14 +686,11 @@ namespace Unity.Logging
         /// <summary>
         /// Allocates a new Payload buffer from the default Payload container.
         /// </summary>
-        /// <remarks>
-        /// See <see cref="LogMemoryManager.AllocatePayloadBuffer"/>.
-        /// </remarks>
         /// <param name="payloadSize">Number of bytes to allocate; must fall within the range of <see cref="UnsafePayloadRingBuffer.MinimumPayloadSize"/> and <see cref="UnsafePayloadRingBuffer.MaximumPayloadSize"/>.</param>
         /// <returns>A valid <see cref="PayloadHandle"/> if successful.</returns>
         public PayloadHandle AllocatePayloadBuffer(uint payloadSize)
         {
-            return AllocatePayloadBufferInternal(payloadSize, out var buffer, false);
+            return AllocatePayloadBufferInternal(payloadSize, out _, false);
         }
 
         /// <summary>
@@ -731,9 +771,6 @@ namespace Unity.Logging
         /// <summary>
         /// Allocates a new Disjointed buffer, which includes allocating the individual Payloads that make up the entire buffer.
         /// </summary>
-        /// <remarks>
-        /// See <see cref="LogMemoryManager.AllocateDisjointedBuffer"/>.
-        /// </remarks>
         /// <param name="payloadSizes">Set of buffer sizes to allocate for each Payload that comprises the DisjointedBuffer.</param>
         /// <param name="payloadHandles">Optional list that receives the <see cref="PayloadHandle"/> values for each Payload allocated by this method.</param>
         /// <returns>If successful, a valid <see cref="PayloadHandle"/> to the DisjointedBuffer's head.</returns>
@@ -745,9 +782,6 @@ namespace Unity.Logging
         /// <summary>
         /// Allocates a new Disjointed buffer, which includes allocating the individual Payloads that make up the entire buffer.
         /// </summary>
-        /// <remarks>
-        /// See <see cref="LogMemoryManager.AllocateDisjointedBuffer"/>.
-        /// </remarks>
         /// <param name="payloadSizes">Set of buffer sizes to allocate for each Payload that comprises the DisjointedBuffer.</param>
         /// <param name="payloadHandles">Optional list that receives the <see cref="PayloadHandle"/> values for each Payload allocated by this method.</param>
         /// <returns>If successful, a valid <see cref="PayloadHandle"/> to the DisjointedBuffer's head.</returns>
@@ -760,12 +794,12 @@ namespace Unity.Logging
         /// Creates a new Disjointed buffer that's composed of preallocated Payloads, instead of allocating new ones.
         /// </summary>
         /// <remarks>
-        /// See <see cref="AllocateDisjointedBuffer"/> for a general
+        /// See <see cref="AllocateDisjointedBuffer(ref Unity.Collections.FixedList64Bytes{ushort},Unity.Collections.NativeList{Unity.Logging.PayloadHandle})"/> for a general
         /// overview on "Disjointed" payload buffers.
         ///
         /// Use this method to group a set of Payload buffers that have already been allocated into a single Disjointed buffer.
-        /// In this case, only the "head" payload needs to be allocated, which is then filled with the specified <see cref="PayloadHandle>"/>
-        /// value. A handle to the new head buffer is returned just as with <see cref="AllocateDisjointedBuffer"/>.
+        /// In this case, only the "head" payload needs to be allocated, which is then filled with the specified <see cref="PayloadHandle"/>
+        /// value. A handle to the new head buffer is returned just as with <see cref="AllocateDisjointedBuffer(ref Unity.Collections.FixedList64Bytes{ushort},Unity.Collections.NativeList{Unity.Logging.PayloadHandle})"/>.
         ///
         /// Disjointed buffers created this way should be treated exactly the same as those allocated up front; the individual Payloads
         /// are now part of the whole buffer and should only be used for immediate reading/writing of data. Likewise, calling
@@ -874,7 +908,7 @@ namespace Unity.Logging
                     // - Disjointed payloads released successfully or this case doesn't apply (not Disjointed buffer)
                     // - Disjointed payloads didn't release successfully but we're overriding with 'force' parameter
                     // - EXCEPT: Disjointed handle is invalid; don't continue because we already know the handle is bad
-                    if (disjointSuccess || (!disjointSuccess && force && disjointResult != PayloadReleaseResult.InvalidHandle))
+                    if (disjointSuccess || (force && disjointResult != PayloadReleaseResult.InvalidHandle))
                     {
                         success = ReleasePayloadBufferInternal(handle);
                         if (success && (bufferLocked || !disjointSuccess))
@@ -1053,7 +1087,7 @@ namespace Unity.Logging
         /// Retrieves a NativeArray to safely access an individual Payload that's part of a Disjointed buffer.
         /// </summary>
         /// <remarks>
-        /// See <see cref="AllocateDisjointedBuffer"/> for a general
+        /// See <see cref="AllocateDisjointedBuffer(ref Unity.Collections.FixedList64Bytes{ushort},Unity.Collections.NativeList{Unity.Logging.PayloadHandle})"/> for a general
         /// overview on "Disjointed" payload buffers.
         ///
         /// Use this method to safely retrieve one of the Payload buffers, that's referenced by a Disjointed buffer, for
@@ -1061,7 +1095,7 @@ namespace Unity.Logging
         ///
         /// The Payload buffer to retrieve is specified by an index of the <see cref="PayloadHandle"/> value within the head buffer.
         /// This index value corresponds to the list index used to create the Disjointed buffer. That is, the Payload size list passed into
-        /// <see cref="AllocateDisjointedBuffer"/> or the <see cref="PayloadHandle"/>
+        /// <see cref="AllocateDisjointedBuffer(ref Unity.Collections.FixedList64Bytes{ushort},Unity.Collections.NativeList{Unity.Logging.PayloadHandle})"/> or the <see cref="PayloadHandle"/>
         /// value list passed into <see cref="CreateDisjointedPayloadBufferFromExistingPayloads(ref FixedList512Bytes{PayloadHandle})"/>.
         ///
         /// As with <see cref="RetrievePayloadBuffer(PayloadHandle, bool, out NativeArray{byte})"/>, the returned NativeArray is a "view"
@@ -1095,6 +1129,11 @@ namespace Unity.Logging
             return success;
         }
 
+        /// <summary>
+        /// Debug function that returns information about <see cref="PayloadHandle"/>
+        /// </summary>
+        /// <param name="handle">PayloadHandle to analyze</param>
+        /// <returns>FixedString that contains debug information</returns>
         public FixedString4096Bytes DebugDetailsOfPayloadHandle(ref PayloadHandle handle)
         {
             var bufferId = PayloadHandle.ExtractBufferIdFromHandle(ref handle);
@@ -1243,7 +1282,7 @@ namespace Unity.Logging
         /// <param name="context">Value returned by preceding call to <see cref="LockPayloadBuffer(PayloadHandle)"/>.</param>
         /// <returns>True if unlock operation was successful or not.</returns>
         /// <seealso cref="LockPayloadBuffer(PayloadHandle)"/>
-        /// <seealso cref="IsPayloadBufferLocked(PayloadHandle, out int)(PayloadHandle, PayloadLockContext)"/>
+        /// <seealso cref="IsPayloadBufferLocked(PayloadHandle, out int)"/>
         /// <seealso cref="ReleasePayloadBuffer(PayloadHandle, out PayloadReleaseResult, bool)"/>
         public bool UnlockPayloadBuffer(PayloadHandle handle, PayloadLockContext context)
         {
@@ -1547,7 +1586,7 @@ namespace Unity.Logging
         /// </summary>
         /// <param name="destMemoryManager"><see cref="LogMemoryManager"/> where to create a copy</param>
         /// <param name="handle"><see cref="PayloadHandle"/> to copy from in this <see cref="LogMemoryManager"/></param>
-        /// <returns>New copied <see cref="PayloadHandle"/> in <see cref="destMemoryManager"/> <see cref="LogMemoryManager"/></returns>
+        /// <returns>New copied <see cref="PayloadHandle"/> in destMemoryManager <see cref="LogMemoryManager"/></returns>
         internal PayloadHandle Copy(ref LogMemoryManager destMemoryManager, PayloadHandle handle)
         {
 #if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
@@ -1927,6 +1966,11 @@ namespace Unity.Logging
             UnityEngine.Debug.Log(message);
         }
 
+        /// <summary>
+        /// Converts pointer into ref LogMemoryManager
+        /// </summary>
+        /// <param name="memoryManager">IntPtr that should reference LogMemoryManager. Cannot be null</param>
+        /// <returns>LogMemoryManager converted from a pointer</returns>
         public static ref LogMemoryManager FromPointer(IntPtr memoryManager)
         {
             unsafe

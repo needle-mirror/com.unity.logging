@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using LoggingCommon;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -25,7 +26,7 @@ namespace MainLoggingGenerator.Extractors
             return false;
         }
 
-        public static LogCallArgumentData Extract(GeneratorExecutionContext m_Context, ExpressionSyntax expression, TypeInfo typeInfo, out string qualifiedName)
+        public static LogCallArgumentData Extract(ContextWrapper context, ExpressionSyntax expression, TypeInfo typeInfo, out string qualifiedName)
         {
             var typeSymbol = typeInfo.Type;
 
@@ -55,14 +56,18 @@ namespace MainLoggingGenerator.Extractors
 
             if (typeSymbol.SpecialType == SpecialType.System_Void)
             {
-                m_Context.LogCompilerErrorVoidType(expression.GetLocation());
+                context.LogCompilerErrorVoidType(expression.GetLocation());
             }
+            // else if (typeSymbol.TypeKind == TypeKind.Pointer)
+            // {
+            //     data = LogCallArgumentData.Pointer(typeSymbol, expression);
+            // }
             else if (typeSymbol.TypeKind == TypeKind.Enum)
             {
                 // NOTE: Enums will be handled as convertible-to-string, and passed as string in PayloadBuffer
                 data = new LogCallArgumentData(typeSymbol, typeSymbol.Name, literalValue, expression);
             }
-            else if (LogMethodGenerator.IsValidFixedStringType(m_Context, typeSymbol, out var fsType))
+            else if (LogMethodGenerator.IsValidFixedStringType(context, typeSymbol, out var fsType))
             {
                 // FixedString types are supported directly and will be treated like primitive value types
                 data = LogCallArgumentData.LiteralAsFixedString(typeSymbol, fsType, literalValue, expression);
@@ -93,7 +98,7 @@ namespace MainLoggingGenerator.Extractors
             }
             else
             {
-                m_Context.LogCompilerErrorInvalidArgument(typeInfo, expression);
+                context.LogCompilerErrorInvalidArgument(typeInfo, expression);
             }
 
             return data;

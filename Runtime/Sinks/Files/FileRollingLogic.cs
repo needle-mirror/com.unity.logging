@@ -1,8 +1,3 @@
-#if UNITY_DOTSRUNTIME
-#define USE_BASELIB
-#define USE_BASELIB_FILEIO
-#endif
-
 // in case if you see 'sharing violation' errors
 //#define LOGGING_FILE_OPS_DEBUG
 
@@ -15,6 +10,10 @@ using Unity.Collections.LowLevel.Unsafe;
 
 namespace Unity.Logging.Sinks
 {
+    /// <summary>
+    /// Class that implements rolling logic
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
     [BurstCompile]
     [GenerateTestsForBurstCompatibility]
     public struct FileRollingLogic<T> : IFileOperations where T : IFileOperationsImplementation
@@ -38,12 +37,20 @@ namespace Unity.Logging.Sinks
         [NativeDisableUnsafePtrRestriction]
         private unsafe State* m_State;
 
+        /// <summary>
+        /// Create from a state pointer
+        /// </summary>
+        /// <param name="pointer">State pointer</param>
         public unsafe FileRollingLogic(IntPtr pointer)
         {
             m_State = (State*)pointer.ToPointer();
             m_Implementation = default;
         }
 
+        /// <summary>
+        /// Returns state pointer
+        /// </summary>
+        /// <returns>State pointer</returns>
         public IntPtr GetPointer()
         {
             unsafe
@@ -52,6 +59,9 @@ namespace Unity.Logging.Sinks
             }
         }
 
+        /// <summary>
+        /// True if state is not null
+        /// </summary>
         public bool IsCreated
         {
             get
@@ -79,6 +89,11 @@ namespace Unity.Logging.Sinks
             }
         }
 
+        /// <summary>
+        /// Initializes state with file sink configuration
+        /// </summary>
+        /// <param name="config">Configuration to use</param>
+        /// <returns>True if file stream was created successfully</returns>
         public bool OpenFileForLogging(ref FileSinkSystem.Configuration config)
         {
             InitializeIfNeeded();
@@ -143,13 +158,16 @@ namespace Unity.Logging.Sinks
 
             unsafe
             {
-                m_Implementation.CloseFile(m_State->FileHandle, ref m_State->FileHandleName);
+                m_Implementation.CloseFile(m_State->FileHandle);
 
                 m_State->FileHandleName = "";
                 m_State->FileHandle = default;
             }
         }
 
+        /// <summary>
+        /// Flush any ongoing file operations
+        /// </summary>
         public void Flush()
         {
             CheckCanAccessFile();
@@ -160,6 +178,9 @@ namespace Unity.Logging.Sinks
             }
         }
 
+        /// <summary>
+        /// Dispose all resources
+        /// </summary>
         public void Dispose()
         {
 #if LOGGING_FILE_OPS_DEBUG
@@ -197,9 +218,15 @@ namespace Unity.Logging.Sinks
         {
             CheckCanAccessFile();
 
-            return m_Implementation.Write(m_State->FileHandle, data, length, offsetPtr, ref m_State->FileHandleName);
+            return m_Implementation.Write(m_State->FileHandle, data, length, offsetPtr);
         }
 
+        /// <summary>
+        /// Update state on data that is appended and writes data into the file
+        /// </summary>
+        /// <param name="data">Data to write</param>
+        /// <param name="length">Length of data to write</param>
+        /// <param name="newLine">If true - newline is going to be added after the data</param>
         public unsafe void Append(byte* data, ulong length, bool newLine)
         {
             CheckCanAccessFile();

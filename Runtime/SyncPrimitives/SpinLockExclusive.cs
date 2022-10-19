@@ -22,6 +22,9 @@ namespace Unity.Logging
         private Int64 m_Handle;
 #endif
 
+        /// <summary>
+        /// IDisposable scoped structure that holds <see cref="SpinLockExclusive"/>. Should be using with <c>using</c>
+        /// </summary>
         [Il2CppSetOption(Option.NullChecks, false)]
         [Il2CppSetOption(Option.ArrayBoundsChecks, false)]
         [Il2CppSetOption(Option.DivideByZeroChecks, false)]
@@ -29,6 +32,10 @@ namespace Unity.Logging
         {
             private SpinLockExclusive m_lock;
 
+            /// <summary>
+            /// Creates ScopedLock and locks SpinLockExclusive
+            /// </summary>
+            /// <param name="sl">SpinLock to lock</param>
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public ScopedLock(SpinLockExclusive sl)
             {
@@ -36,6 +43,9 @@ namespace Unity.Logging
                 m_lock.Lock();
             }
 
+            /// <summary>
+            /// Unlocks the lock
+            /// </summary>
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void Dispose()
             {
@@ -69,6 +79,9 @@ namespace Unity.Logging
 #endif
         }
 
+        /// <summary>
+        /// True if locked
+        /// </summary>
 #if !NET_DOTS
         public bool Locked => m_SpinLock.Locked;
 #else

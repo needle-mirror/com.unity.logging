@@ -41,7 +41,7 @@ namespace Unity.Logging.Sinks
             return new IntPtr(id);
         }
 
-        public unsafe bool Write(IntPtr fileHandle, byte* data, ulong length, ulong* offsetPtr, ref FixedString4096Bytes _)
+        public unsafe bool Write(IntPtr fileHandle, byte* data, ulong length, ulong* offsetPtr)
         {
             var ptr = Burst2ManagedCall<ManagedFunctionsFileInMemory.WriteDelegate, ManagedFunctionsFileInMemory>.Ptr();
 
@@ -56,7 +56,7 @@ namespace Unity.Logging.Sinks
         {
         }
 
-        public void CloseFile(IntPtr fileHandle, ref FixedString4096Bytes _)
+        public void CloseFile(IntPtr fileHandle)
         {
             var ptr = Burst2ManagedCall<ManagedFunctionsFileInMemory.CloseDelegate, ManagedFunctionsFileInMemory>.Ptr();
 

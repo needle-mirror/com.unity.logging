@@ -40,7 +40,7 @@ namespace Unity.Logging
         /// Note this doesn't check if the PayloadHandle actually references a valid Payload buffer or not.
         /// An invalid handle typically indicates a Payload allocation failed.
         ///
-        /// To check if the handle references a valid Payload buffer, call <see cref="LogMemoryManager.IsPayloadHandleValid(PayloadHandle)."/>
+        /// To check if the handle references a valid Payload buffer, call <see cref="LogMemoryManager.IsPayloadHandleValid(PayloadHandle)"/>
         /// </remarks>
         /// <returns>True if valid and false if not</returns>
         public bool IsValid => m_Value != 0;

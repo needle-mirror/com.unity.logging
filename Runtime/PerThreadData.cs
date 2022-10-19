@@ -8,6 +8,9 @@ using Unity.Logging.Internal;
 
 namespace Unity.Logging
 {
+    /// <summary>
+    /// Class that is used by logging to save some per-thread data for logging management. Usually stores thread's LoggerHandle that is currently used
+    /// </summary>
     [Il2CppSetOption(Option.NullChecks, false)]
     [Il2CppSetOption(Option.ArrayBoundsChecks, false)]
     [Il2CppSetOption(Option.DivideByZeroChecks, false)]
@@ -23,6 +26,9 @@ namespace Unity.Logging
             Initialize();
         }
 
+        /// <summary>
+        /// Initialize static data
+        /// </summary>
         [BurstDiscard]
         public static void Initialize()
         {
@@ -33,7 +39,7 @@ namespace Unity.Logging
             }
         }
 
-        public static void Shutdown()
+        private static void Shutdown()
         {
             if (s_Initialized.Data != 0)
             {
@@ -42,12 +48,18 @@ namespace Unity.Logging
             }
         }
 
+        /// <summary>
+        /// Reset all per thread data
+        /// </summary>
         public static void Reset()
         {
             Shutdown();
             Initialize();
         }
 
+        /// <summary>
+        /// Current LoggerHandle in this thread. Used internally by mirror struct's implicit constructors
+        /// </summary>
         public static LoggerHandle ThreadLoggerHandle
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]

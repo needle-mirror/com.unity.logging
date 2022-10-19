@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using LoggingCommon;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -14,16 +15,14 @@ namespace SourceGenerator.Logging
         {
         }
 
-        public static StringBuilder Emit(in GeneratorExecutionContext context, in LogCallsCollection invokeData, ulong assemblyHash)
+        public static string Emit(in ContextWrapper context, in LogCallsCollection invokeData, ulong assemblyHash)
         {
             var emitter = new LogMethodEmitter
             {
                 m_InvokeData = invokeData,
             };
 
-            var sb = new StringBuilder();
-
-            sb.Append($@"{EmitStrings.SourceFileHeader}
+            return $@"{EmitStrings.SourceFileHeader}
 {EmitStrings.SourceFileHeaderIncludes}
 
 namespace Unity.Logging
@@ -68,6 +67,13 @@ namespace Unity.Logging
             if (@lock.IsValid)
                 PerThreadData.ThreadLoggerHandle = handle;
             return @lock;
+        }}
+
+        /// <summary>
+        /// Flushes all log messages into sinks. Can be called only on the main thread.
+        /// </summary>
+        public static void FlushAll() {{
+            Unity.Logging.Internal.LoggerManager.FlushAll();
         }}
 
         public static LogContextWithDecoratorLogTo To(in LogContextWithDecorator handle) {{
@@ -135,9 +141,7 @@ namespace Unity.Logging
 }}
 
 {EmitStrings.SourceFileFooter}
-");
-
-            return sb;
+";
         }
 
         private StringBuilder EmitLogMethodDefinitions()
@@ -149,7 +153,6 @@ namespace Unity.Logging
             foreach (var levelPair in m_InvokeData.InvokeInstances)
             {
                 var logLevel = levelPair.Key;
-
                 foreach (var currMethod in levelPair.Value)
                 {
                     EmitMethod(sb, in currMethod, logLevel, uniqHashSet);
@@ -161,8 +164,9 @@ namespace Unity.Logging
 
         private void EmitMethod(StringBuilder sb, in LogCallData currMethod, LogCallKind logLevel, HashSet<string> uniqHashSet)
         {
+            var optionalUnsafe = currMethod.ShouldBeMarkedUnsafe ? "unsafe " : "";
             var paramListDeclarationThatUserSees = EmitLogMethodParameterList(currMethod).ToString();
-            var paramListDeclarationBurstedFunction = EmitLogMethodParameterList(currMethod, blittableOnly: true).ToString();
+            var paramListDeclarationBurstedFunction = EmitLogMethodParameterList(currMethod, visibleToBurst: true).ToString();
 
             var paramListCallThatWeSendToBurst = EmitLogMethodParameterListCall(currMethod);
 
@@ -174,49 +178,16 @@ namespace Unity.Logging
 
             if (currMethod.MessageData.Omitted == false && currMethod.ShouldUsePayloadHandleForMessage)
             {
-                const string name = "msg";
-                var call = (currMethod.MessageData.MessageType == "object") ? ".ToString()" : "";
-
-                sbConvert.Append($@"
-                PayloadHandle payloadHandle_{name} = Unity.Logging.Builder.BuildMessage({name + call}, ref logController.MemoryManager);
-");
-
-                sbConvertGlobal?.Append($@"
-                PayloadHandle payloadHandle_{name} = Unity.Logging.Builder.BuildMessage({name + call}, ref Unity.Logging.Internal.LoggerManager.GetGlobalDecoratorMemoryManager());
-");
+                currMethod.MessageData.AppendConvertCode(sbConvert, sbConvertGlobal);
             }
 
-            for (var i = 0; i < currMethod.ArgumentData.Count; i++)
+            for (var argNumber = 0; argNumber < currMethod.ArgumentData.Count; argNumber++)
             {
-                var arg = currMethod.ArgumentData[i];
+                var arg = currMethod.ArgumentData[argNumber];
 
-                if (arg.ShouldUsePayloadHandle)
-                {
-                    static string EmitCopyStringToPayloadBuffer(string dst, string src, bool globalMemManager, bool prependTypeId = false, bool prependLength = false, bool deferredRelease = false)
-                    {
-                        var sbOptParams = new StringBuilder();
-                        if (prependTypeId)
-                            sbOptParams.Append(", prependTypeId: true");
-                        if (prependLength)
-                            sbOptParams.Append(", prependLength: true");
-                        if (deferredRelease)
-                            sbOptParams.Append(", deferredRelease: true");
+                arg.AppendConvertCode(argNumber, sbConvert, sbConvertGlobal);
 
-                        var memManager = "ref logController.MemoryManager";
-                        if (globalMemManager)
-                            memManager = "ref Unity.Logging.Internal.LoggerManager.GetGlobalDecoratorMemoryManager()";
-
-                        return $"var payloadHandle_{dst} = Unity.Logging.Builder.CopyStringToPayloadBuffer({src}, {memManager}{sbOptParams});";
-                    }
-
-                    var call = (arg.IsConvertibleToString && !arg.IsNonLiteralString) ? ".ToString()" : "";
-                    sbConvert.AppendLine(EmitCopyStringToPayloadBuffer($"arg{i}", $"arg{i}" + call, globalMemManager: false, prependTypeId: true, prependLength: true));
-                    sbConvertGlobal?.AppendLine(EmitCopyStringToPayloadBuffer($"arg{i}", $"arg{i}" + call, globalMemManager: true, prependTypeId: true, prependLength: true));
-                }
-
-                var castString = arg.GetCastCode(i);
-                if (string.IsNullOrEmpty(castString) == false)
-                    castCode.AppendLine(castString);
+                arg.AppendCastCode(argNumber, castCode);
             }
 
             if (logLevel == LogCallKind.Decorate)
@@ -231,13 +202,13 @@ namespace Unity.Logging
             ref var memManager = ref LogContextWithDecorator.GetMemoryManagerNotThreadSafe(ref handles);
             PayloadHandle handle;
             {castCode}
-            {EmitLogHandles(currMethod, emitMessage: true, burstCompatible: true)}
+            {EmitLogHandles(currMethod, emitMessage: true)}
         }}
 
         // to add a constant key-value to a global decoration. When Log call is done - a snapshot will be taken
         // example:
         //  Log.Decorate('ConstantExampleLog1', 999999);
-        public static LogDecorateScope Decorate({paramListDeclarationThatUserSees})
+        public {optionalUnsafe}static LogDecorateScope Decorate({paramListDeclarationThatUserSees})
         {{
             {sbConvertGlobal}
             var dec = LoggerManager.BeginEditDecoratePayloadHandles(out var nBefore);
@@ -252,7 +223,7 @@ namespace Unity.Logging
         // adds a constant key-value to the decoration in dec's logger. When Log call is done - a snapshot will be taken
         // example:
         //   using var decorConst1 = Log.To(log).Decorate('ConstantExampleLog1', 999999);
-        public static LogDecorateScope Decorate(in this LogContextWithLock ctx, {paramListDeclarationThatUserSees})
+        public {optionalUnsafe}static LogDecorateScope Decorate(in this LogContextWithLock ctx, {paramListDeclarationThatUserSees})
         {{
             try
             {{
@@ -282,7 +253,7 @@ namespace Unity.Logging
         //   {{
         //      Log.To(d).Decorate(""SomeInt"", 321); <--
         //   }}
-        public static void Decorate(in this LogContextWithDecoratorLogTo dec, {paramListDeclarationThatUserSees})
+        public {optionalUnsafe}static void Decorate(in this LogContextWithDecoratorLogTo dec, {paramListDeclarationThatUserSees})
         {{
             if (dec.context.Lock.IsValid == false) return;
             ref var logController = ref dec.context.Lock.GetLogController();
@@ -307,10 +278,10 @@ namespace Unity.Logging
         private static void WriteBursted{logLevel}{uniqPostfix}({paramListDeclarationBurstedFunction}, ref LogController logController, ref LogControllerScopedLock @lock)
         {{
             {castCode}
-            {EmitLogBuilders(currMethod, logLevel, burstCompatible: true)}
+            {EmitLogBuilders(currMethod, logLevel)}
         }}
 
-        public static void {logLevel}({paramListDeclarationThatUserSees})
+        public {optionalUnsafe}static void {logLevel}({paramListDeclarationThatUserSees})
         {{
             var currentLoggerHandle = Unity.Logging.Internal.LoggerManager.CurrentLoggerHandle;
             if (currentLoggerHandle.IsValid == false) return;
@@ -328,7 +299,7 @@ namespace Unity.Logging
             }}
         }}
 
-        public static void {logLevel}(this LogContextWithLock dec, {paramListDeclarationThatUserSees})
+        public {optionalUnsafe}static void {logLevel}(this LogContextWithLock dec, {paramListDeclarationThatUserSees})
         {{
             try
             {{
@@ -370,8 +341,8 @@ namespace Unity.Logging
             throw new Exception("Something is wrong with GenerateUniqPostfix - unable to generate unique string in 100 tries");
         }
 
-        // Parameters visible to user
-        private static StringBuilder EmitLogMethodParameterList(in LogCallData currInstance, bool blittableOnly = false)
+        // Parameters visible to user or burst
+        private static StringBuilder EmitLogMethodParameterList(in LogCallData currInstance, bool visibleToBurst = false)
         {
             var sb = new StringBuilder();
 
@@ -382,30 +353,17 @@ namespace Unity.Logging
             {
                 needComma = true;
 
-                var msgType = currInstance.MessageData.GetParameterTypeForUser(blittable: blittableOnly);
-
-                if (currInstance.MessageData.IsNativeText)
-                    sb.Append($"in NativeTextBurstWrapper msg");
-                else if (msgType == "string" || msgType == "global::System.String")
-                    sb.Append($"string msg");
-                else
-                    sb.Append($"in {msgType} msg");
+                sb = currInstance.MessageData.AppendUserOrBurstVisibleParameter(sb, visibleToBurst);
             }
 
             for (var i = 0; i < currInstance.ArgumentData.Count; i++)
             {
                 var arg = currInstance.ArgumentData[i];
-                var argTypeName = arg.GetParameterTypeForUser(blittableOnly, i);
 
                 if (needComma)
                     sb.Append(", ");
 
-                if (arg.IsNativeText)
-                    sb.Append($"in NativeTextBurstWrapper {argTypeName.name}");
-                else if (argTypeName.type == "string" || argTypeName.type == "global::System.String")
-                    sb.Append($"string {argTypeName.name}");
-                else
-                    sb.Append($"in {argTypeName.type} {argTypeName.name}");
+                sb = arg.AppendUserVisibleParameter(sb, visibleToBurst, i);
 
                 needComma = true;
             }
@@ -422,10 +380,7 @@ namespace Unity.Logging
             {
                 needComma = true;
 
-                if (currInstance.ShouldUsePayloadHandleForMessage)
-                    sb.Append("payloadHandle_msg");
-                else
-                    sb.Append("msg");
+                sb = currInstance.MessageData.AppendCallParameterForBurst(sb);
             }
 
             for (var i = 0; i < currInstance.ArgumentData.Count; i++)
@@ -434,81 +389,32 @@ namespace Unity.Logging
                     sb.Append(", ");
 
                 var arg = currInstance.ArgumentData[i];
-                if (arg.ShouldUsePayloadHandle)
-                {
-                    sb.Append($"payloadHandle_{arg.GetInvocationParam(i)}");
-                }
-                else
-                {
-                    sb.Append($"{arg.GetInvocationParam(i)}");
-                }
+
+                sb = arg.AppendCallParameterForBurst(sb, i);
+
                 needComma = true;
             }
 
             return sb;
         }
 
-        private static StringBuilder EmitLogHandles(in LogCallData currInstance, bool emitMessage, bool burstCompatible)
+        private static StringBuilder EmitLogHandles(in LogCallData currInstance, bool emitMessage)
         {
             var sbHandles = new StringBuilder();
 
             if (emitMessage)
-                sbHandles.Append(EmitMessageBuilder(currInstance, burstCompatible));
+                sbHandles.Append(currInstance.MessageData.GetHandlesBuildCode());
 
             for (var i = 0; i < currInstance.ArgumentData.Count; i++)
             {
                 var arg = currInstance.ArgumentData[i];
-                if (arg.IsSpecialSerializableType())
-                {
-                    sbHandles.Append($@"
-            handle = Unity.Logging.Builder.BuildContextSpecialType(arg{i}, ref memManager);
-            if (handle.IsValid)
-                handles.Add(handle);
-");
-                }
-                else if (burstCompatible && arg.ShouldUsePayloadHandle)
-                {
-                    sbHandles.Append($@"
-            if (arg{i}.IsValid)
-                handles.Add(arg{i});
-");
-                }
-                else
-                {
-                    sbHandles.Append($@"
-            handle = Unity.Logging.Builder.BuildContext(arg{i}, ref memManager);
-            if (handle.IsValid)
-                handles.Add(handle);
-");
-                }
+
+                sbHandles = arg.AppendHandlesBuildCode(sbHandles, i);
             }
             return sbHandles;
         }
 
-        private static string EmitMessageBuilder(in LogCallData currInstance, bool burstCompatible)
-        {
-            if (currInstance.MessageData.Omitted)
-            {
-                return $@"
-            handle = Unity.Logging.Builder.BuildMessage(""{currInstance.MessageData.LiteralValue}"", ref memManager);
-            if (handle.IsValid)
-                handles.Add(handle);";
-            }
-
-            if (burstCompatible && currInstance.ShouldUsePayloadHandleForMessage)
-            {
-                return $@"
-            if (msg.IsValid)
-                handles.Add(msg);";
-            }
-
-            return $@"
-            handle = Unity.Logging.Builder.BuildMessage(msg, ref memManager);
-            if (handle.IsValid)
-                handles.Add(handle);";
-        }
-
-        private static string EmitLogBuilders(in LogCallData currInstance, LogCallKind callKind, bool burstCompatible)
+        private static string EmitLogBuilders(in LogCallData currInstance, LogCallKind callKind)
         {
             var fixedListSize = currInstance.ArgumentData.Count < 512 ? 512 : 4096;
 
@@ -519,13 +425,13 @@ namespace Unity.Logging
             ref var memManager = ref logController.MemoryManager;
 
             // Build payloads for each parameter
-            {EmitMessageBuilder(currInstance, burstCompatible)}
+            {currInstance.MessageData.GetHandlesBuildCode()}
 
             var stackTraceId = logController.NeedsStackTrace ? ManagedStackTraceWrapper.Capture() : 0;
 
             Unity.Logging.Builder.BuildDecorators(ref logController, @lock, ref handles);
 
-            {EmitLogHandles(currInstance, emitMessage: false, burstCompatible)}
+            {EmitLogHandles(currInstance, emitMessage: false)}
 
             // Create disjointed buffer
             handle = memManager.CreateDisjointedPayloadBufferFromExistingPayloads(ref handles);

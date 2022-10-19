@@ -1,8 +1,3 @@
-#if UNITY_DOTSRUNTIME
-#define USE_BASELIB
-#define USE_BASELIB_FILEIO
-#endif
-
 using System;
 using Unity.Collections;
 using Unity.Burst;
@@ -10,6 +5,9 @@ using Unity.Collections.LowLevel.Unsafe;
 
 namespace Unity.Logging.Sinks
 {
+    /// <summary>
+    /// Extension class for LoggerWriterConfig .JsonFile
+    /// </summary>
     public static class JsonFileSinkSystemExt
     {
         /// <summary>

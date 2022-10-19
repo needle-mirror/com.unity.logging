@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -47,22 +48,32 @@ namespace LoggingCommon
         private readonly List<Marker> timers = new List<Marker>();
         private int currentId;
 
+        private int ThreadId;
+
         //This is necessary since the instance is static but it can be called by multiple threads.
-        private static readonly ThreadLocal<Profiler> _instance = new ThreadLocal<Profiler>(() =>
-        {
-            return new Profiler();
-        });
+        private static readonly ThreadLocal<Profiler> _instance = new ThreadLocal<Profiler>(() => new Profiler());
 
         private static Profiler instance => _instance.Value;
 
+        private static ConcurrentDictionary<int, Profiler> s_AllThreadProfilers = new ConcurrentDictionary<int, Profiler>();
+
         private Profiler()
         {
-            Init();
+            RegisterThisThread();
+        }
+
+        private void RegisterThisThread()
+        {
+            var threadId = Thread.CurrentThread.ManagedThreadId;
+            s_AllThreadProfilers.TryRemove(threadId, out _);
+            Init(threadId);
+            s_AllThreadProfilers.TryAdd(threadId, this);
         }
 
         public static void Initialize()
         {
-            instance.Init();
+            s_AllThreadProfilers.Clear();
+            instance.RegisterThisThread();
         }
 
         public static void Begin(string marker)
@@ -77,7 +88,18 @@ namespace LoggingCommon
 
         public static string PrintStats()
         {
-            return instance.CollectStats();
+            var builder = new StringBuilder();
+
+            var arr = s_AllThreadProfilers.OrderBy(p => p.Key).Select(kv => kv.Value).ToArray();
+
+            builder.AppendLine($"Registered Profilers ({arr.Length}):");
+
+            foreach (var p in arr)
+            {
+                builder.AppendLine(p.CollectStats());
+            }
+
+            return builder.ToString();
         }
 
         private int GetChildId(string name)
@@ -91,14 +113,15 @@ namespace LoggingCommon
             return -1;
         }
 
-        private void Init()
+        private void Init(int threadId)
         {
+            ThreadId = threadId;
             timers.Clear();
             timers.Add(new Marker
             {
                 parent = 0,
                 id = 0,
-                name = "Total",
+                name = $"Total Thread #{ThreadId}",
                 overheadTicks = 0,
                 ticks = Stopwatch.GetTimestamp(),
                 count = 1,
@@ -142,6 +165,9 @@ namespace LoggingCommon
 
         private string CollectStats()
         {
+            while (currentId != 0)
+                Stop();
+
             var t = Stopwatch.GetTimestamp();
 
             var root = timers[0];
@@ -191,6 +217,8 @@ namespace LoggingCommon
             }
 
             PrintChildrenSortedRecursion(root);
+
+            builder.AppendLine("Timing end");
         }
 
         private static string TicksToMsec(long ticks)

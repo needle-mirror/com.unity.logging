@@ -49,14 +49,28 @@ namespace Unity.Logging.Sinks
         }
     }
 
+    /// <summary>
+    /// Struct that wraps OnBeforeSinkDelegate for a sink
+    /// </summary>
     public unsafe readonly struct OnBeforeSinkDelegate
     {
+        /// <summary>
+        /// Delegate that describes the function pointer
+        /// </summary>
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void Delegate(IntPtr userData);
 
         private readonly FunctionPointer<Delegate> m_FunctionPointer;
+
+        /// <summary>
+        /// True if function pointer was created
+        /// </summary>
         public bool IsCreated => m_FunctionPointer.IsCreated;
 
+        /// <summary>
+        /// Constructor that takes the delegate and compiles it with burst
+        /// </summary>
+        /// <param name="func">Delegate to compile</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public OnBeforeSinkDelegate(Delegate func)
         {
@@ -64,6 +78,10 @@ namespace Unity.Logging.Sinks
             m_FunctionPointer = BurstCompiler.CompileFunctionPointer(func);
         }
 
+        /// <summary>
+        /// Invoke the compiled delegate
+        /// </summary>
+        /// <param name="p">UserData</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Invoke(IntPtr p)
         {
@@ -75,14 +93,28 @@ namespace Unity.Logging.Sinks
         }
     }
 
+    /// <summary>
+    /// Struct that wraps OnAfterSinkDelegate for a sink
+    /// </summary>
     public unsafe readonly struct OnAfterSinkDelegate
     {
+        /// <summary>
+        /// Delegate that describes the function pointer
+        /// </summary>
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void Delegate(IntPtr userData);
 
         private readonly FunctionPointer<Delegate> m_FunctionPointer;
+
+        /// <summary>
+        /// True if function pointer was created
+        /// </summary>
         public bool IsCreated => m_FunctionPointer.IsCreated;
 
+        /// <summary>
+        /// Constructor that takes the delegate and compiles it with burst
+        /// </summary>
+        /// <param name="func">Delegate to compile</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public OnAfterSinkDelegate(Delegate func)
         {
@@ -90,6 +122,10 @@ namespace Unity.Logging.Sinks
             m_FunctionPointer = BurstCompiler.CompileFunctionPointer(func);
         }
 
+        /// <summary>
+        /// Invoke the compiled delegate
+        /// </summary>
+        /// <param name="p">UserData</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Invoke(IntPtr p)
         {
@@ -101,14 +137,28 @@ namespace Unity.Logging.Sinks
         }
     }
 
+    /// <summary>
+    /// Struct that wraps OnDisposeDelegate for a sink
+    /// </summary>
     public unsafe readonly struct OnDisposeDelegate
     {
+        /// <summary>
+        /// Delegate that describes the function pointer
+        /// </summary>
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void Delegate(IntPtr userData);
 
         private readonly FunctionPointer<Delegate> m_FunctionPointer;
+
+        /// <summary>
+        /// True if function pointer was created
+        /// </summary>
         public bool IsCreated => m_FunctionPointer.IsCreated;
 
+        /// <summary>
+        /// Constructor that takes the delegate and compiles it with burst
+        /// </summary>
+        /// <param name="func">Delegate to compile</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public OnDisposeDelegate(Delegate func)
         {
@@ -116,6 +166,10 @@ namespace Unity.Logging.Sinks
             m_FunctionPointer = BurstCompiler.CompileFunctionPointer(func);
         }
 
+        /// <summary>
+        /// Invoke the compiled delegate
+        /// </summary>
+        /// <param name="p">UserData</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Invoke(IntPtr p)
         {
@@ -127,14 +181,28 @@ namespace Unity.Logging.Sinks
         }
     }
 
+    /// <summary>
+    /// Struct that wraps OnLogMessageEmitDelegate for a sink
+    /// </summary>
     public unsafe readonly struct OnLogMessageEmitDelegate
     {
+        /// <summary>
+        /// Delegate that describes the function pointer
+        /// </summary>
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void Delegate(in LogMessage logEvent, ref FixedString512Bytes outTemplate, ref UnsafeText messageBuffer, IntPtr memoryManager, IntPtr userData, Allocator allocator);
 
         private readonly FunctionPointer<Delegate> m_FunctionPointer;
+
+        /// <summary>
+        /// True if function pointer was created
+        /// </summary>
         public bool IsCreated => m_FunctionPointer.IsCreated;
 
+        /// <summary>
+        /// Constructor that takes the delegate and compiles it with burst
+        /// </summary>
+        /// <param name="func">Delegate to compile</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public OnLogMessageEmitDelegate(Delegate func)
         {
@@ -142,6 +210,15 @@ namespace Unity.Logging.Sinks
             m_FunctionPointer = BurstCompiler.CompileFunctionPointer(func);
         }
 
+        /// <summary>
+        /// Invoke the delegate that emits the message converted to <see cref="UnsafeText"/>
+        /// </summary>
+        /// <param name="logEvent">Log message event</param>
+        /// <param name="outTemplate">Template that sink is using</param>
+        /// <param name="messageBuffer">Text representation of the message</param>
+        /// <param name="memoryManager">Memory manager that owns Log message</param>
+        /// <param name="userData">User data</param>
+        /// <param name="allocator">Allocator that should be used in case of any allocation needed</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Invoke(in LogMessage logEvent, ref FixedString512Bytes outTemplate, ref UnsafeText messageBuffer, IntPtr memoryManager, IntPtr userData, Allocator allocator)
         {
@@ -154,14 +231,28 @@ namespace Unity.Logging.Sinks
         }
     }
 
+    /// <summary>
+    /// Struct that wraps OnLogMessageFormatterDelegate for a sink
+    /// </summary>
     public readonly struct OnLogMessageFormatterDelegate
     {
+        /// <summary>
+        /// Delegate that describes the function pointer
+        /// </summary>
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate int Delegate(in LogMessage logEvent, ref FormatterStruct formatter, ref FixedString512Bytes outTemplate, ref UnsafeText messageBuffer, IntPtr memoryManager, IntPtr userData, Allocator allocator);
 
         private readonly FunctionPointer<Delegate> m_FunctionPointer;
+
+        /// <summary>
+        /// True if function pointer was created
+        /// </summary>
         public bool IsCreated => m_FunctionPointer.IsCreated;
 
+        /// <summary>
+        /// Constructor that takes the delegate and compiles it with burst
+        /// </summary>
+        /// <param name="func">Delegate to compile</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public OnLogMessageFormatterDelegate(Delegate func)
         {
@@ -169,6 +260,17 @@ namespace Unity.Logging.Sinks
             m_FunctionPointer = BurstCompiler.CompileFunctionPointer(func);
         }
 
+        /// <summary>
+        /// Invoke the compiled delegate to convert message into <see cref="UnsafeText"/>
+        /// </summary>
+        /// <param name="logEvent">Log message event</param>
+        /// <param name="formatter">Formatter that sink is using</param>
+        /// <param name="outTemplate">Template that sink is using</param>
+        /// <param name="messageBuffer">Text representation of the message</param>
+        /// <param name="memoryManager">Memory manager that owns Log message</param>
+        /// <param name="userData">User data</param>
+        /// <param name="allocator">Allocator that should be used in case of any allocation needed</param>
+        /// <returns>Length of the messageOutput. Negative on error</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int Invoke(in LogMessage logEvent, ref FormatterStruct formatter, ref FixedString512Bytes outTemplate, ref UnsafeText messageBuffer, IntPtr memoryManager, IntPtr userData, Allocator allocator)
         {

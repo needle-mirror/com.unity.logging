@@ -58,6 +58,10 @@ namespace Unity.Logging
 
         // Constant decoration
         private ThreadSafeList4096<PayloadHandle> DecoratePayloadHandles;
+
+        /// <summary>
+        /// Current synchronization mode
+        /// </summary>
         public SyncMode SyncMode;
 
         /// <summary>
@@ -323,24 +327,73 @@ namespace Unity.Logging
         /// </summary>
         public struct SinkStruct : IDisposable
         {
+            /// <summary>
+            /// Output template that this sink should use
+            /// </summary>
             public FixedString512Bytes OutputTemplate;
+            /// <summary>
+            /// Minimal level that this sink is interested in
+            /// </summary>
             public LogLevel MinimalLevel;
+            /// <summary>
+            /// If non-zero - it captures stacktraces
+            /// </summary>
             public int CaptureStackTracesBytes;
+            /// <summary>
+            /// Last timestamp that this sink processed. Sink will ignore all timestamps less/equal that this
+            /// </summary>
             public long LastTimestamp;
+
+            /// <summary>
+            /// User data
+            /// </summary>
             public IntPtr UserData;
 
+            /// <summary>
+            /// Formatter that is used with this sink
+            /// </summary>
             public FormatterStruct Formatter;
 
+            /// <summary>
+            /// Delegate called before the sink
+            /// </summary>
             public OnBeforeSinkDelegate OnBeforeSink;
+
+            /// <summary>
+            /// Delegate called on message emit for this sink
+            /// </summary>
             public OnLogMessageEmitDelegate OnLogMessageEmit;
+
+            /// <summary>
+            /// Delegate called after the sink
+            /// </summary>
             public OnAfterSinkDelegate OnAfterSink;
+
+            /// <summary>
+            /// Delegate called on dispose of this sink
+            /// </summary>
             public OnDisposeDelegate OnDispose;
 
+            /// <summary>
+            /// True if sink needs stacktraces
+            /// </summary>
             public bool CaptureStackTraces => CaptureStackTracesBytes != 0;
+
+            /// <summary>
+            /// True if the sink was created
+            /// </summary>
             public bool IsCreated => OnLogMessageEmit.IsCreated;
 
+            /// <summary>
+            /// User's data attached
+            /// </summary>
+            /// <returns>User data</returns>
             public IntPtr GetUserData() => UserData;
 
+            /// <summary> Checks if the <see cref="LogMessage"/>'s Timestamp and Level fits (see 'remarks') the sink. Updates sink's 'LastTimestamp' if method returns true. </summary>
+            /// <remarks>To return true '<see cref="LogMessage"/>'s Timestamp should be less than sink's LastTimestamp (means newer than last processed message. And its Level should be >= than sink's MinimalLevel.</remarks>>
+            /// <param name="elem">Log message to check</param>
+            /// <returns>True if this <see cref="LogMessage"/> is going to be processed by the sink</returns>
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public bool IsInterestedIn(ref LogMessage elem)
             {
@@ -352,6 +405,9 @@ namespace Unity.Logging
                 return elem.Level >= MinimalLevel;
             }
 
+            /// <summary>
+            /// Dispose the sink
+            /// </summary>
             public void Dispose()
             {
                 if (OnDispose.IsCreated)
@@ -509,6 +565,10 @@ namespace Unity.Logging
             }
         }
 
+        /// <summary>
+        /// Creates new sink using <see cref="SinkSystemBase"/>'s ToSinkStruct method
+        /// </summary>
+        /// <param name="sink">SinkSystemBase object</param>
         public void AddSinkStruct(SinkSystemBase sink)
         {
             try

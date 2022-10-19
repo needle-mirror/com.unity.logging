@@ -18,12 +18,10 @@ class Build
 
         ICSharpReferenceable[] refsForSourceGenerator =
         {
-            new PackageReference {Name = "Microsoft.CodeAnalysis.CSharp.Workspaces", Version = "3.8.0"},
-            new PackageReference {Name = "Microsoft.CodeAnalysis.CSharp", Version = "3.8.0"}
+            new PackageReference {Name = "Microsoft.CodeAnalysis.CSharp", Version = "4.0.1"}
         };
 
         var DebugBuild = false;
-        var DebugGenToAssets = DebugBuild;
         var VerboseLogging = DebugBuild;
 
         var common = new CSharpProgram2
@@ -51,13 +49,6 @@ class Build
         if (VerboseLogging)
         {
             const string def = "VERBOSE_LOGGING";
-            common.Defines.Add(def);
-            generator.Defines.Add(def);
-        }
-
-        if (DebugGenToAssets)
-        {
-            const string def = "UNITY_LOGGING_GENERATE_TO_ASSETS_FOLDER";
             common.Defines.Add(def);
             generator.Defines.Add(def);
         }

@@ -51,6 +51,7 @@ namespace Unity.Logging.Internal
             if (s_StackTraces != null)
                 return;
 
+            StackTraceCapture.Initialize();
             s_StackTraces = new ConcurrentDictionary<long, StackTraceCapture.StackTraceData>();
             s_Counter = 0;
 

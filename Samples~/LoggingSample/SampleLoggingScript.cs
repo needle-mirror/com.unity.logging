@@ -9,6 +9,9 @@ using Logger = Unity.Logging.Logger;
 
 namespace Samples
 {
+    /// <summary>
+    /// Example - how to use Unity.Logging
+    /// </summary>
     public class SampleLoggingScript : MonoBehaviour
     {
         void Awake()

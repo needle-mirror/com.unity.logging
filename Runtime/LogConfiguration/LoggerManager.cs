@@ -73,6 +73,8 @@ namespace Unity.Logging.Internal
             if (s_Initialized != 0) return;
                 s_Initialized = 1;
 
+            ThreadGuard.InitializeFromMainThread();
+
             BurstHelper.CheckThatBurstIsEnabled(false);
             PerThreadData.Initialize();
             ManagedStackTraceWrapper.Initialize();
@@ -187,10 +189,32 @@ namespace Unity.Logging.Internal
         /// </summary>
         public static void FlushAll()
         {
-            // make sure all double buffers are processed
-            ScheduleUpdateLoggers();
-            ScheduleUpdateLoggers();
-            CompleteUpdateLoggers();
+            if (BurstHelper.IsManaged && ThreadGuard.IsMainThread())
+            {
+                // burst cannot do next calls because they involve classes / managed types
+                // only main thread can do the next calls because if will spawn jobs
+                ScheduleUpdateLoggers();
+                ScheduleUpdateLoggers(); // make sure all double buffers are processed
+                CompleteUpdateLoggers();
+            }
+            else
+            {
+                try
+                {
+                    LogControllerWrapper.LockRead();
+
+                    var n = LogControllerWrapper.GetLogControllersCount();
+                    for (var i = 0; i < n; i++)
+                    {
+                        ref var lc = ref LogControllerWrapper.GetLogControllerByIndexUnderLock(i);
+                        lc.FlushSync();
+                    }
+                }
+                finally
+                {
+                    LogControllerWrapper.UnlockRead();
+                }
+            }
         }
 
         /// <summary>
@@ -507,6 +531,9 @@ namespace Unity.Logging.Internal
             }
         }
 
+        /// <summary>
+        /// Debug function to write debug info about log controllers and their message queues
+        /// </summary>
         [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS"), Conditional("UNITY_DOTS_DEBUG")] // ENABLE_UNITY_COLLECTIONS_CHECKS or UNITY_DOTS_DEBUG
         public static void DebugPrintQueueInfos()
         {
@@ -559,6 +586,9 @@ namespace Unity.Logging.Internal
             m_onNewLoggerCreatedEvent = null;
         }
 
+        /// <summary>
+        /// If there is no current logger - create a default one
+        /// </summary>
         public static void CreateDefaultLoggerIfNone()
         {
             if (CurrentLoggerHandle.IsValid == false)

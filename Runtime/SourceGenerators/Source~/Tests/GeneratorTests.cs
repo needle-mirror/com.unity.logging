@@ -44,7 +44,7 @@ class ClassA()
             Assert.AreEqual(1, parser.LogCalls.Count, "Cannot detect Log calls");
 
             var generator = CommonUtils.GenerateCode(testData);
-            var m = generator.methodsGenCode.ToString();
+            var m = generator.methodsGenCode;
 
             /*
             Assert.IsTrue(generator.invokeData.IsValid);
@@ -96,7 +96,7 @@ class ClassA()
             Assert.AreEqual(1, parser.LogCalls.Count, "Cannot detect Log calls");
 
             var generator = CommonUtils.GenerateCode(testData);
-            var m = generator.methodsGenCode.ToString();
+            var m = generator.methodsGenCode;
 
             /*
             Assert.IsTrue(generator.invokeData.IsValid);
@@ -141,7 +141,7 @@ class ClassA()
             Assert.AreEqual(6, parser.LogCalls.Count, "Cannot detect Log calls");
 
             var generator = CommonUtils.GenerateCode(testData);
-            var m = generator.methodsGenCode.ToString();
+            var m = generator.methodsGenCode;
 
             /*
             Assert.IsTrue(generator.invokeData.IsValid);
@@ -175,7 +175,7 @@ class ClassA()
             Assert.AreEqual(1, parser.LogCalls.Count, "Cannot detect Log calls");
 
             var generator = CommonUtils.GenerateCode(testData);
-            var m = generator.methodsGenCode.ToString();
+            var m = generator.methodsGenCode;
 
             Assert.IsNotEmpty(m);
 
@@ -208,7 +208,7 @@ class ClassA()
             Assert.AreEqual(2, parser.LogCalls.Count, "Cannot detect Log calls");
 
             var generator = CommonUtils.GenerateCode(testData);
-            var m = generator.methodsGenCode.ToString();
+            var m = generator.methodsGenCode;
 
             Assert.IsNotEmpty(m);
 
@@ -244,7 +244,7 @@ class ClassA()
             Assert.AreEqual(2, parser.LogCalls.Count, "Cannot detect Log calls");
 
             var generator = CommonUtils.GenerateCode(testData);
-            var m = generator.methodsGenCode.ToString();
+            var m = generator.methodsGenCode;
 
             Assert.IsNotEmpty(m);
 
@@ -308,7 +308,7 @@ class ClassA()
             Assert.AreEqual(1, parser.LogCalls.Count, "Cannot detect Log calls");
 
             var generator = CommonUtils.GenerateCode(testData);
-            var m = generator.methodsGenCode.ToString();
+            var m = generator.methodsGenCode;
 
             Assert.IsNotEmpty(m);
 
@@ -443,7 +443,7 @@ class ClassA
             Assert.AreEqual("string", generator.invokeData.InvokeInstances[LogCallKind.Info][0].MessageData.MessageType);
             Assert.IsTrue(generator.invokeData.IsValid);
 
-            Assert.AreEqual(1, Count(generator.methodsGenCode.ToString(), "handles.Add(msg);"), "msg should be added only once");
+            Assert.AreEqual(1, Count(generator.methodsGenCode, "handles.Add(msg);"), "msg should be added only once");
         }
 
         public static int Count(string s, string substr, StringComparison strComp = StringComparison.Ordinal)
@@ -506,7 +506,7 @@ class ClassA
 
             var generator = CommonUtils.GenerateCode(testData);
 
-            var methods = generator.methodsGenCode.ToString();
+            var methods = generator.methodsGenCode;
 
             var indxStart = methods.IndexOf("public static LogDecorateScope Decorate(string msg, string arg0)", StringComparison.Ordinal);
             Assert.IsTrue(indxStart >= 0, "Cannot find Decorate method");
@@ -544,7 +544,7 @@ class ClassA
 
             var generator = CommonUtils.GenerateCode(testData);
 
-            var methods = generator.methodsGenCode.ToString();
+            var methods = generator.methodsGenCode;
 
             // [BurstCompile(DisableDirectCall = true)]
             // private static void WriteBurstedDecorateuL287IROOjCwnYh9BcsxSQ__(in PayloadHandle msg, in Int32 arg0, ref LogContextWithDecorator handles)
@@ -740,7 +740,7 @@ class ClassA
 
             var gen = CommonUtils.GenerateCode(testData);
 
-            var methods = gen.methodsGenCode.ToString();
+            var methods = gen.methodsGenCode;
 
             Assert.IsTrue(methods.Contains("static void Info(string msg, in SByte arg0)"));
         }
@@ -776,7 +776,7 @@ class ClassA
 
             var gen = CommonUtils.GenerateCode(testData);
 
-            var methods = gen.methodsGenCode.ToString();
+            var methods = gen.methodsGenCode;
             Assert.IsTrue(methods.Contains("static void Info(in FixedString4096Bytes msg, in SByte arg0)"));
             Assert.IsTrue(methods.Contains(@"public static void Info(string msg, in SByte arg0)")); // This is needed for compilation to be successful, but shouldn't be used
             Assert.IsTrue(methods.Contains("static void Info(string msg, in Int32 arg0)"));
@@ -1052,7 +1052,7 @@ class ClassLiteral
             Assert.IsTrue(generator.invokeData.IsValid);
 
             Assert.IsNull(generator.structureData.StructTypes);
-            var s = generator.methodsGenCode.ToString();
+            var s = generator.methodsGenCode;
 
             Assert.IsTrue(s.Contains("__(in PayloadHandle msg, in Int32 arg0, in PayloadHandle arg1"));
 
@@ -1173,9 +1173,69 @@ class ClassA
 
             Assert.IsNull(generator.structureData.StructTypes);
 
-            var s = generator.methodsGenCode.ToString();
+            var s = generator.methodsGenCode;
             Assert.IsTrue(s.Contains("FixedString32Bytes arg0)")); // FixedString32Bytes is a special type
             Assert.IsTrue(s.Contains("BuildContextSpecialType(arg0")); // FixedString32Bytes is a special type
+        }
+
+        [Test]
+        public void TestUnsafeFieldStruct()
+        {
+            var testData = @"
+class ClassA
+{
+    unsafe struct UnsafeStruct
+    {
+        public byte* ptr;
+    }
+
+    public void A()
+    {
+        FixedString64Bytes s = ""Fixed {0}"";
+        Unity.Logging.Log.Info(s, new UnsafeStruct());
+    }
+}";
+            var generator = CommonUtils.GenerateCode(testData);
+
+            Assert.AreEqual(1, generator.invokeData.InvokeInstances[LogCallKind.Info].Count);
+            Assert.AreEqual("FixedString64Bytes", generator.invokeData.InvokeInstances[LogCallKind.Info][0].MessageData.MessageType);
+            Assert.IsTrue(generator.invokeData.IsValid);
+
+            var types = generator.typesGenCode.ToString();
+            Assert.IsTrue(types.Contains("public IntPtr ptr;"));
+            Assert.IsTrue(types.Contains("internal struct UnsafeStruct_"));
+
+            Assert.IsTrue(types.Contains("public unsafe static implicit operator UnsafeStruct_"));
+            Assert.IsTrue(types.Contains("ptr = new IntPtr(arg.ptr)"));
+        }
+
+        [Test]
+        public void TestUnsafeArgument()
+        {
+            var testData = @"
+class ClassA
+{
+    public void A()
+    {
+        FixedString64Bytes s = ""Fixed {0}"";
+        unsafe {
+            long longV = 2134145123;
+            Unity.Logging.Log.Info(s, &longV);
+        }
+    }
+}";
+            var generator = CommonUtils.GenerateCode(testData);
+
+            Assert.AreEqual(1, generator.invokeData.InvokeInstances[LogCallKind.Info].Count);
+            Assert.AreEqual("FixedString64Bytes", generator.invokeData.InvokeInstances[LogCallKind.Info][0].MessageData.MessageType);
+            Assert.IsTrue(generator.invokeData.IsValid);
+
+            Assert.IsTrue(generator.typesGenCode.Length == 0);
+            Assert.IsTrue(generator.methodsGenCode.Contains("in FixedString64Bytes msg, IntPtr arg0, ref LogController logController"));
+            Assert.IsTrue(generator.methodsGenCode.Contains("public unsafe static void Info(in FixedString64Bytes msg, global::System.Int64* arg0)"));
+
+            Assert.IsFalse(generator.methodsGenCode.Contains("handle = Unity.Logging.Builder.BuildContext(arg0, ref memManager);")); // FALSE
+            Assert.IsTrue(generator.methodsGenCode.Contains("handle = Unity.Logging.Builder.BuildContextSpecialType(arg0, ref memManager);"));
         }
 
         [Test]
@@ -1217,7 +1277,7 @@ class ClassA
             Assert.AreEqual(SpecialType.System_Boolean, generator.structureData.StructTypes[0].FieldData[2].Symbol.Type.SpecialType);
             Assert.AreEqual(SpecialType.System_Char, generator.structureData.StructTypes[0].FieldData[3].Symbol.Type.SpecialType);
 
-            var s1 = generator.methodsGenCode.ToString();
+            var s1 = generator.methodsGenCode;
             var s2 = generator.typesGenCode.ToString();
 
             var linesWithBurstedFuncSignatures = s1.Split('\n').Where(s => s.Contains("static void") && s.Contains("BurstedInfo")).ToList();
@@ -1608,7 +1668,7 @@ class ClassA
 
             Assert.IsNull(generator.structureData.StructTypes);
 
-            var m = generator.methodsGenCode.ToString();
+            var m = generator.methodsGenCode;
 
             Assert.IsNotEmpty(m);
 
@@ -1653,7 +1713,7 @@ class ClassA
             Assert.IsTrue(invInfo[1].ArgumentData[0].IsSpecialSerializableType());
             Assert.AreEqual("UnsafeText", invInfo[1].ArgumentData[0].ArgumentTypeName);
 
-            var methods = generator.methodsGenCode.ToString();
+            var methods = generator.methodsGenCode;
 
             {
                 var indxBegin = methods.IndexOf("in PayloadHandle msg, in UnsafeText arg0", StringComparison.Ordinal);
@@ -1701,7 +1761,7 @@ class ClassA
             // public PayloadHandle c;
             // public global::FixedString512Bytes d;
             //
-            // public bool WriteFormattedOutput(ref UnsafeText output, ref LogMemoryManager memAllocator, ref ArgumentInfo currArgSlot)
+            // public bool AppendToUnsafeText(ref UnsafeText output, ref LogMemoryManager memAllocator, ref ArgumentInfo currArgSlot)
             // {
             //     bool success = true;
             //
@@ -1751,7 +1811,7 @@ class ClassA
 
             Assert.IsNull(generator.structureData.StructTypes);
 
-            var s = generator.methodsGenCode.ToString();
+            var s = generator.methodsGenCode;
             Assert.IsTrue(s.Contains("Int32 arg0)"));
             Assert.IsTrue(s.Contains("BuildContextSpecialType(arg0"));
         }
@@ -1779,7 +1839,7 @@ class ClassA
             Assert.IsTrue(generator.invokeData.InvokeInstances[LogCallKind.Error][0].ArgumentData[0].IsConvertibleToString);
             Assert.IsTrue(generator.invokeData.InvokeInstances[LogCallKind.Error][0].ArgumentData[0].ShouldUsePayloadHandle);
 
-            var m = generator.methodsGenCode.ToString();
+            var m = generator.methodsGenCode;
             Assert.IsTrue(m.Contains("Error(string msg, in global::System.Text.StringBuilder arg0)"));
         }
 
@@ -1804,7 +1864,7 @@ class ClassA
 
             Assert.IsNotNull(generator.structureData.StructTypes);
 
-            var s = generator.methodsGenCode.ToString();
+            var s = generator.methodsGenCode;
             Assert.IsTrue(s.Contains("CopyStringToPayloadBuffer(arg0.ToString()"));
 
         }
@@ -1829,7 +1889,7 @@ class ClassA
 }";
             var generator = CommonUtils.GenerateCode(testData);
 
-            var m = generator.methodsGenCode.ToString();
+            var m = generator.methodsGenCode;
             Assert.IsTrue(m.Contains("Error(in global::Class1 arg0)"));
             Assert.IsTrue(m.Contains("Error(in global::Struct1"));
 
@@ -1864,7 +1924,7 @@ class ClassA
 }";
             var generator = CommonUtils.GenerateCode(testData);
 
-            var m = generator.methodsGenCode.ToString();
+            var m = generator.methodsGenCode;
             Assert.IsFalse(m.Contains("Error(in global::Class1 arg0)"));
             Assert.IsFalse(m.Contains("Error(in global::Unity.Logging.Struct1__"));
 
@@ -1924,7 +1984,7 @@ class ClassA
 
             Assert.IsNull(generator.structureData.StructTypes);
 
-            var s = generator.methodsGenCode.ToString();
+            var s = generator.methodsGenCode;
             Assert.IsTrue(s.Contains("Int32 arg0)"));
             Assert.IsTrue(s.Contains("BuildContextSpecialType(arg0"));
         }
@@ -1961,7 +2021,7 @@ class ClassA
             Assert.IsTrue(generator.invokeData.IsValid);
             Assert.IsNull(generator.structureData.StructTypes);
 
-            var s = generator.methodsGenCode.ToString();
+            var s = generator.methodsGenCode;
             Assert.IsTrue(s.Contains("Int32 arg0"));
             Assert.IsTrue(s.Contains("Int32 arg1"));
             Assert.IsTrue(s.Contains("Int32 arg2"));
@@ -2155,7 +2215,7 @@ class ClassA
             Assert.IsTrue(generator.invokeData.IsValid);
             Assert.IsNull(generator.structureData.StructTypes);
 
-            var s = generator.methodsGenCode.ToString();
+            var s = generator.methodsGenCode;
             Assert.IsTrue(s.Contains("Int32 arg0)"));
             Assert.IsTrue(s.Contains("BuildContextSpecialType(arg0"));
         }
@@ -2183,7 +2243,7 @@ class ClassA
 
             Assert.IsNull(generator.structureData.StructTypes);
 
-            var s = generator.methodsGenCode.ToString();
+            var s = generator.methodsGenCode;
             Assert.IsTrue(s.Contains("Int32 arg0"));
             Assert.IsTrue(s.Contains("Int64 arg1"));
             Assert.IsTrue(s.Contains("BuildContextSpecialType(arg0"));
@@ -2212,7 +2272,7 @@ class ClassA
 
             Assert.IsNull(generator.structureData.StructTypes);
 
-            var s = generator.methodsGenCode.ToString();
+            var s = generator.methodsGenCode;
             Assert.IsTrue(s.Contains("Int32 arg0)"));
             Assert.IsTrue(s.Contains("BuildContextSpecialType(arg0"));
         }
@@ -2297,7 +2357,7 @@ class ClassA
 }";
             var generator = CommonUtils.GenerateCode(testData);
 
-            Assert.IsTrue(generator.methodsGenCode.ToString().Contains("internal static class Log"), "generator.methodsGenCode.ToString().Contains('internal static class Log')");
+            Assert.IsTrue(generator.methodsGenCode.Contains("internal static class Log"), "generator.methodsGenCode.Contains('internal static class Log')");
         }
 
         [Test]
@@ -2313,7 +2373,374 @@ class ClassA
 }";
             var generator = CommonUtils.GenerateCode(testData);
 
-            Assert.IsTrue(generator.methodsGenCode.ToString().Contains("internal static class Log"), "log should be generated if no usage detected");
+            Assert.IsTrue(generator.methodsGenCode.Contains("internal static class Log"), "log should be generated if no usage detected");
+            Assert.IsNull(generator.userTypesGenCode);
+        }
+
+        [Test]
+        public void TestMirrorCustomFullNamespace()
+        {
+            var testData = $@"
+    public partial struct MyStructSimple : Unity.Logging.ILoggableMirrorStruct<MyStructSimple>
+    {{
+        public {CustomMirrorStruct.HeaderTypeName} pref;
+        public int someInt;
+
+        public MyStructSimple(int i)
+        {{
+            someInt = i;
+        }}
+
+        public override string ToString()
+        {{
+            return $""[MyStruct ololo = {{someInt}}]"";
+        }}
+
+
+        public bool AppendToUnsafeText(ref UnsafeText output, ref FormatterStruct formatter, ref LogMemoryManager memAllocator, ref ArgumentInfo currArgSlot, int depth)
+        {{
+            var success = formatter.BeforeObject(ref output);
+            success = formatter.WriteProperty(ref output, ""someInt"", someInt, ref currArgSlot) && success;
+            success = formatter.AfterObject(ref output) && success;
+            return success;
+        }}
+    }}
+";
+            var generator = CommonUtils.GenerateCode(testData);
+
+            Assert.IsTrue(generator.methodsGenCode.Contains("internal static class Log"), "log should be generated if no usage detected");
+        }
+
+        [Test]
+        public void TestSameMirrorCustomUsingLogging()
+        {
+            var testData = @"
+
+    using Unity.Logging;
+
+    public partial struct MyStructSimple : ILoggableMirrorStruct<MyStructSimple>
+    {
+        public ulong Type;
+        public int someInt;
+
+        public MyStructSimple(int i)
+        {
+            someInt = i;
+        }
+
+        public override string ToString()
+        {
+            return $""[MyStruct ololo = {someInt}]"";
+        }
+
+        public bool AppendToUnsafeText(ref UnsafeText output, ref FormatterStruct formatter, ref LogMemoryManager memAllocator, ref ArgumentInfo currArgSlot, int depth)
+        {
+            var success = formatter.BeforeObject(ref output);
+            success = formatter.WriteProperty(ref output, ""someInt"", someInt, ref currArgSlot) && success;
+            success = formatter.AfterObject(ref output) && success;
+            return success;
+        }
+    }
+";
+            var generator = CommonUtils.GenerateCode(testData);
+
+            Assert.IsTrue(generator.methodsGenCode.Contains("internal static class Log"), "log should be generated if no usage detected");
+        }
+
+        [Test]
+        public void TestDifferentMirrorCustomUsingLogging()
+        {
+            var testData = $@"
+
+    using Unity.Logging;
+
+    public struct Check {{ public int a; }}
+
+    namespace CustomNameSpace
+    {{
+        public partial struct DateTimeWrapper : ILoggableMirrorStruct<DateTime>
+        {{
+            private {CustomMirrorStruct.HeaderTypeName} FirstField;
+            private long ticks;
+
+            public static implicit operator DateTimeWrapper(in DateTime arg)
+            {{
+                return new DateTimeWrapper
+                {{
+                    FirstField = {CustomMirrorStruct.HeaderTypeName}.Create(),
+                    ticks = arg.Ticks
+                }};
+            }}
+
+            public bool AppendToUnsafeText(ref UnsafeText output, ref FormatterStruct formatter, ref LogMemoryManager memAllocator, ref ArgumentInfo currArgSlot, int depth)
+            {{
+                Unity.Logging.Log.Info(""He {{0}}"", new DateTime());
+                Unity.Logging.Log.Info(""He {{0}} {{1}}"", new DateTimeWrapper(), new Check()); // don't generate DateTimeWrapper wrapper type
+
+                return formatter.WriteProperty(ref output, "", ticks, ref currArgSlot);
+            }}
+        }}
+    }}
+";
+            var generator = CommonUtils.GenerateCode(testData);
+
+            var parsers = generator.parserGenCode.ToString();
+
+            Assert.IsTrue(parsers.Contains("typeLength = UnsafeUtility.SizeOf<global::Unity.Logging.Check_"));
+            Assert.IsTrue(parsers.Contains("typeLength = UnsafeUtility.SizeOf<global::CustomNameSpace.DateTimeWrapper>()"));
+            Assert.IsFalse(parsers.Contains("DateTimeWrapper_"));
+
+            var methods = generator.methodsGenCode;
+            Assert.IsTrue(methods.Contains("internal static class Log"), "log should be generated if no usage detected");
+
+            Assert.IsFalse(methods.Contains("DateTimeWrapper_"));
+            Assert.IsFalse(methods.Contains("DateTime_"));
+
+            Assert.IsTrue(methods.Contains("__(in PayloadHandle msg, in global::CustomNameSpace.DateTimeWrapper arg0, "));
+
+
+            Assert.IsNotNull(generator.userTypesGenCode);
+            Assert.IsTrue(generator.userTypesGenCode.Contains("partial struct DateTimeWrapper"));
+
+            var autogeneratedTypes = generator.typesGenCode.ToString();
+            Assert.IsTrue(autogeneratedTypes.Contains("internal struct Check_"));
+        }
+
+        [Test]
+        public void TestMirrorComplexCase1()
+        {
+            var testData = @"
+namespace OtherNamespace
+{{
+    public struct MyStruct
+    {{
+        public int someInt;
+        public string ololo;
+
+        public MyStruct(int i)
+        {{
+            someInt = i;
+            ololo = i.ToString();
+        }}
+
+        public override string ToString()
+        {{
+            return $""i = {someInt} ololo = {ololo}"";
+        }}
+        static void DoLog() {{
+            Unity.Logging.Log.Info(""Hello {0}"", new MyStruct(42));
+            Unity.Logging.Log.Info(""Hello ToStr {0}"", new MyStruct(42).ToString());
+        }}
+    }}
+}}
+
+namespace Namespace2
+{
+    public struct MyStruct
+    {
+        public int someInt;
+        public string ololo;
+
+        public MyStruct(int i)
+        {
+            someInt = i;
+            ololo = i.ToString();
+        }
+    }
+
+    public partial struct MyStructMirror : ILoggableMirrorStruct<MyStruct>
+    {
+        public MirrorStructHeader pre;
+        public int someInt;
+        public FixedString512Bytes s;
+
+        public static implicit operator MyStructMirror(in MyStruct arg)
+        {
+            return new MyStructMirror
+            {
+                pre = MirrorStructHeader.Create(),
+                someInt = arg.someInt,
+                s = arg.ololo
+            };
+        }
+
+        public bool AppendToUnsafeText(ref UnsafeText output, ref FormatterStruct formatter, ref LogMemoryManager memAllocator, ref ArgumentInfo currArgSlot, int depth)
+        {
+            var time = DateTime.UtcNow;
+            Unity.Logging.Log.Info(""Hello {0}. Time {1}"", new MyStruct(42), time);
+            Unity.Logging.Log.Info(""Hello ToStr {0}"", new MyStruct(42).ToString());
+            return true;
+        }
+    }
+
+    public partial struct MyStructSimple : ILoggableMirrorStruct<MyStructSimple>
+    {
+        public ulong TypeId;
+        public int someInt;
+
+        public MyStructSimple(int i)
+        {
+            TypeId = 1;
+            someInt = i;
+        }
+
+        public bool AppendToUnsafeText(ref UnsafeText output, ref FormatterStruct formatter, ref LogMemoryManager memAllocator, ref ArgumentInfo currArgSlot, int depth)
+        {
+            return true;
+        }
+    }
+
+    public partial struct DateTimeWrapper : ILoggableMirrorStruct<DateTime>
+    {
+        private MirrorStructHeader FirstField;
+        private long ticks;
+
+        public static implicit operator DateTimeWrapper(in DateTime arg)
+        {
+            return new DateTimeWrapper
+            {
+                FirstField = Unity.Logging.DateTimeWrapper.MirrorStructHeader.Create(),
+                ticks = arg.Ticks
+            };
+        }
+
+        public bool AppendToUnsafeText(ref UnsafeText output, ref FormatterStruct formatter, ref LogMemoryManager memAllocator, ref ArgumentInfo currArgSlot, int depth)
+        {
+            return formatter.WriteProperty(ref output, "", ticks, ref currArgSlot);
+        }
+    }
+
+}";
+
+            var generator = CommonUtils.GenerateCode(testData);
+
+            var parsers = generator.parserGenCode.ToString();
+
+            Assert.IsTrue(parsers.Contains("global::Namespace2.MyStructMirror"));
+            Assert.IsTrue(parsers.Contains("global::Namespace2.DateTimeWrapper>()"));
+            Assert.IsTrue(parsers.Contains("global::OtherNamespace.MyStruct_"));
+
+            var methods = generator.methodsGenCode;
+            Assert.IsTrue(methods.Contains("internal static class Log"), "log should be generated if no usage detected");
+
+            Assert.IsFalse(methods.Contains("DateTimeWrapper_"));
+            Assert.IsFalse(methods.Contains("DateTime_"));
+
+            Assert.IsTrue(methods.Contains("in global::Namespace2.MyStructMirror arg0, in global::Namespace2.DateTimeWrapper arg1"));
+
+
+            var userTypes = generator.userTypesGenCode;
+            Assert.IsNotNull(userTypes);
+            Assert.IsTrue(userTypes.Contains(@"namespace Namespace2
+{
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    partial struct MyStructMirror"));
+            Assert.IsTrue(userTypes.Contains(@"namespace Namespace2
+{
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    partial struct MyStructSimple"));
+            Assert.IsTrue(userTypes.Contains(@"namespace Namespace2
+{
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    partial struct DateTimeWrapper"));
+
+            var autogeneratedTypes = generator.typesGenCode.ToString();
+
+            Assert.IsTrue(autogeneratedTypes.Contains(@"namespace OtherNamespace
+{
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    internal struct MyStruct_"));
+
+            Assert.IsTrue(autogeneratedTypes.Contains("ILoggableMirrorStruct<global::OtherNamespace.MyStruct>"));
+        }
+
+        [Test]
+        public void TestMirrorNoImplicit()
+        {
+            var testData = $@"
+
+    using Unity.Logging;
+
+    public partial struct DateTimeWrapper : ILoggableMirrorStruct<DateTime>
+    {{
+        private {CustomMirrorStruct.HeaderTypeName} FirstField;
+        private long ticks;
+
+        public static implicit operator DateTimeWrapper(in long arg)
+        {{
+            return new DateTimeWrapper
+            {{
+                FirstField = {CustomMirrorStruct.HeaderTypeName}.Create(),
+                ticks = arg
+            }};
+        }}
+
+        public bool AppendToUnsafeText(ref UnsafeText output, ref FormatterStruct formatter, ref LogMemoryManager memAllocator, ref ArgumentInfo currArgSlot, int depth)
+        {{
+            return formatter.WriteProperty(ref output, "", ticks, ref currArgSlot);
+        }}
+    }}
+";
+            var generator = CommonUtils.GenerateCodeExpectErrors(testData, out var diagnostics);
+
+            Assert.AreEqual(1, diagnostics.Length);
+            Assert.AreEqual(DiagnosticSeverity.Error, diagnostics[0].Severity);
+            Assert.AreEqual("LMS0005", diagnostics[0].Id);
+
+            Assert.IsTrue(generator.methodsGenCode.Contains("internal static class Log"), "log should be generated if no usage detected");
+        }
+
+        [Test]
+        public void TestMirrorIsStructItself()
+        {
+            var testData = $@"
+
+    using Unity.Logging;
+
+    public partial struct MyStructSimple : ILoggableMirrorStruct<MyStructSimple>
+    {{
+        public MirrorStructHeader pre;
+        public int someInt;
+
+        public MyStructSimple(int i)
+        {{
+            pre = MirrorStructHeader.Create();
+            someInt = i;
+        }}
+
+        public override string ToString()
+        {{
+            Unity.Logging.Log.To(log).Info(""Hello Simple {{0}}"", new MyStructSimple(1241));
+            return $""[MyStruct val = {{someInt}}]"";
+        }}
+
+        public bool AppendToUnsafeText(ref UnsafeText output, ref FormatterStruct formatter, ref LogMemoryManager memAllocator, ref ArgumentInfo currArgSlot, int depth)
+        {{
+            var success = formatter.BeforeObject(ref output);
+            success = formatter.WriteProperty(ref output, ""userMirror"", someInt, ref currArgSlot) && success;
+            success = formatter.AfterObject(ref output) && success;
+
+            return success;
+        }}
+    }}
+";
+            var generator = CommonUtils.GenerateCode(testData);
+
+            var parsers = generator.parserGenCode.ToString();
+            Assert.IsTrue(parsers.Contains("// user type"));
+
+            var methods = generator.methodsGenCode;
+            Assert.IsTrue(methods.Contains("MyStructSimple"));
+            Assert.IsFalse(methods.Contains("global::Unity.Logging.MyStructSimple"));
+            var countGlobal = CommonUtils.StringOccurrencesCount(methods, "in global::MyStructSimple arg0", StringComparison.Ordinal);
+            var countStructMention = CommonUtils.StringOccurrencesCount(methods, "MyStructSimple arg0", StringComparison.Ordinal);
+            Assert.AreEqual(countGlobal, countStructMention, "MyStructSimple is probably used in wrong namespace");
+
+            var userTypes = generator.userTypesGenCode;
+            Assert.IsTrue(userTypes.Contains("partial struct MyStructSimple"));
+
+            var autogeneratedTypes = generator.typesGenCode.ToString();
+            Assert.IsFalse(autogeneratedTypes.Contains("struct"));
         }
     }
 }

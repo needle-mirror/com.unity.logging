@@ -9,7 +9,15 @@ namespace Unity.Logging.Internal
     [StructLayout(LayoutKind.Sequential)]
     public struct LogContextWithDecoratorLogTo
     {
+        /// <summary>
+        /// <see cref="LogContextWithDecorator"/> context that was passed into Log.To()
+        /// </summary>
         public LogContextWithDecorator context;
+
+        /// <summary>
+        /// Create the wrapper, used in Log.To call
+        /// </summary>
+        /// <param name="d">Context to use</param>
         public LogContextWithDecoratorLogTo(in LogContextWithDecorator d)
         {
             context = d;

@@ -22,6 +22,9 @@ namespace Unity.Logging
         }
 #endif
 
+        /// <summary>
+        /// Creates a default logger and sets it as the current one, if the current logger is null. This method is automatically called with RuntimeInitializeOnLoadMethod <see cref="RuntimeInitializeLoadType.BeforeSceneLoad"/> priority.
+        /// </summary>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         public static void CreateDefaultLogger()
         {
@@ -31,7 +34,7 @@ namespace Unity.Logging
                 // if user didn't do that - a default one is created
                 var logDir = GetCurrentAbsoluteLogDirectory();
 
-                LoggerManager.Logger = new Logger(new LoggerConfig()
+                LoggerManager.Logger = new LoggerConfig()
                                                   .SyncMode.FatalIsSync()
                                                   .MinimumLevel.Debug()
                                                   .CaptureStacktrace()
@@ -46,7 +49,7 @@ namespace Unity.Logging
                                                   // if not - fallback to UnityEngine.Debug.Log sink
                                                   .WriteTo.UnityDebugLog()
 #endif
-                                                  );
+                                                  .CreateLogger(LogMemoryManagerParameters.Default);
 
                 if (Debug.isDebugBuild)
                 {
@@ -125,7 +128,7 @@ namespace Unity.Logging
             IntegrateIntoPlayerLoop();
         }
 
-        public static void IntegrateIntoPlayerLoop()
+        private static void IntegrateIntoPlayerLoop()
         {
 #if !UNITY_DOTSRUNTIME
             var loggingManagerType = typeof(LoggerManager);
@@ -153,8 +156,12 @@ namespace Unity.Logging
 #endif
         }
 
+        /// <summary>
+        /// Ticks the Unity.Logging update
+        /// </summary>
         public static void UpdateFunction()
         {
+            // Used from Dots Runtime, don't change to private
             s_UpdateHandle.Complete();
             s_UpdateHandle = LoggerManager.ScheduleUpdateLoggers();
         }

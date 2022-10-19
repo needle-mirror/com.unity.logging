@@ -1,4 +1,5 @@
 using System;
+using LoggingCommon;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -8,7 +9,7 @@ namespace MainLoggingGenerator.Extractors
 {
     public static class MessageTypeExtractor
     {
-        public static (LogCallMessageData data, bool messageOmitted) Extract(GeneratorExecutionContext m_Context, ExpressionSyntax expression, TypeInfo typeInfo)
+        public static (LogCallMessageData data, bool messageOmitted) Extract(ContextWrapper m_Context, ExpressionSyntax expression, TypeInfo typeInfo)
         {
             // If the actual type is a regular C# string then use this type instead of the "Converted" type.
             // Basically, C# strings may be implicitly converted to FixedString, which we don't want. If the argument

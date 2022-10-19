@@ -35,6 +35,12 @@ public enum Allocator
 
 namespace Unity.Logging
 {{
+    public interface ILoggableMirrorStruct
+    {{
+        bool AppendToUnsafeText(ref UnsafeText output, ref FormatterStruct formatter, ref LogMemoryManager memAllocator, ref ArgumentInfo currArgSlot, int depth);
+    }}
+    public interface ILoggableMirrorStruct<T> : ILoggableMirrorStruct {{}}
+
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public class NotLogged : Attribute {{}}
 
@@ -187,8 +193,9 @@ struct UnsafeText
             Assert.IsNotNull(generator);
             Assert.IsNotNull(generator.methodsGenCode);
 
-            var methodSource = generator.methodsGenCode.ToString();
+            var methodSource = generator.methodsGenCode;
             var typesGenSource = generator.typesGenCode == null ? "" : generator.typesGenCode.ToString();
+            var userTypesGenSource = generator.userTypesGenCode ?? "";
             var parserGenSource = generator.parserGenCode == null ? "" : generator.parserGenCode.ToString();
 
             Assert.IsNotNull(methodSource);
@@ -204,10 +211,18 @@ struct UnsafeText
             Assert.IsFalse(methodSource.Contains("in string"));
             Assert.IsFalse(methodSource.Contains("in global::System.String"));
             Assert.IsFalse(methodSource.Contains("object msg"));
-            Assert.IsFalse(methodSource.Contains("unsafe"));
-            Assert.IsFalse(parserGenSource.Contains("unsafe"));
-            Assert.IsFalse(typesGenSource.Contains("unsafe"));
 
+            var expectedUnsafe = generator.invokeData.InvokeInstances.Any(kv => kv.Value.Any(v => v.ShouldBeMarkedUnsafe));
+            if (generator.structureData.StructTypes != null)
+                expectedUnsafe = expectedUnsafe || generator.structureData.StructTypes.Any(s => s.ShouldBeMarkedUnsafe);
+
+            if (expectedUnsafe == false)
+            {
+                Assert.IsFalse(methodSource.Contains("unsafe"));
+                Assert.IsFalse(parserGenSource.Contains("unsafe"));
+                Assert.IsFalse(typesGenSource.Contains("unsafe"));
+                Assert.IsFalse(userTypesGenSource.Contains("unsafe"));
+            }
 
             {
                 // validate that structs are generated only once
@@ -254,6 +269,18 @@ struct UnsafeText
                 if (invokes.Count == 0)
                     generator.invokeData.InvokeInstances.Remove(level);
             }
+        }
+
+        public static int StringOccurrencesCount(string haystack, string needle, StringComparison strComp)
+        {
+            var result = 0;
+            var index = haystack.IndexOf(needle, strComp);
+            while (index != -1)
+            {
+                ++result;
+                index = haystack.IndexOf(needle, index + needle.Length, strComp);
+            }
+            return result;
         }
     }
 }

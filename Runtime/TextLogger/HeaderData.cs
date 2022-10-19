@@ -15,14 +15,36 @@ namespace Unity.Logging
     [Il2CppSetOption(Option.DivideByZeroChecks, false)]
     public unsafe readonly struct HeaderData
     {
+        /// <summary>
+        /// Error code that was detected during the parsing of the binary data
+        /// </summary>
         public readonly ErrorCodes Error;
 
+        /// <summary>
+        /// Pointer to message buffer UTF8 string
+        /// </summary>
         public readonly byte* MessageBufferPointer;
+        /// <summary>
+        /// Message buffer length in bytes
+        /// </summary>
         public readonly int MessageBufferLength;
 
+        /// <summary>
+        /// Payload handles attached to the LogMessage
+        /// </summary>
         public readonly PayloadHandle* Payloads;
+        /// <summary>
+        /// Count of payload handles attached to the LogMessage
+        /// </summary>
         public readonly int PayloadsCount;
+        /// <summary>
+        /// Payload handles that are context buffers
+        /// </summary>
         public readonly int ContextBufferCount;
+
+        /// <summary>
+        /// Payload handles that are decoration buffers
+        /// </summary>
         public readonly ushort DecorationBufferCount;
 
         const int DecorationStartIndex = 2;
@@ -55,10 +77,22 @@ namespace Unity.Logging
             Error = errorState;
         }
 
+        /// <summary>
+        /// Number of payload handles that are decoration pairs
+        /// </summary>
         public ushort DecorationPairs => (ushort)(DecorationBufferCount / 2);
 
+        /// <summary>
+        /// Index of payload handle that is context buffer
+        /// </summary>
         public int ContextStartIndex => DecorationStartIndex + DecorationBufferCount;
 
+        /// <summary>
+        /// Parses Header of the binary data
+        /// </summary>
+        /// <param name="messageData">LogMessage that owns the binary data</param>
+        /// <param name="memAllocator">Memory manager that has the binary data</param>
+        /// <returns>Parsed HeaderData</returns>
         public static HeaderData Parse(in LogMessage messageData, ref LogMemoryManager memAllocator)
         {
             // Payload handle is expected to reference a DisjointedBuffer.
@@ -136,6 +170,12 @@ namespace Unity.Logging
 
         private static HeaderData FailedWithError(ErrorCodes errCode) => new HeaderData(errCode);
 
+        /// <summary>
+        /// Try to get the <see cref="PayloadHandle"/> for the context payload by index
+        /// </summary>
+        /// <param name="contextIndex">Index of the context payload</param>
+        /// <param name="payloadHandle">Resulting PayloadHandle, or default if not found</param>
+        /// <returns>True if the context payload was found</returns>
         public bool TryGetContextPayload(int contextIndex, out PayloadHandle payloadHandle)
         {
             if (contextIndex < 0 || contextIndex >= ContextBufferCount)
@@ -148,6 +188,14 @@ namespace Unity.Logging
             return true;
         }
 
+        /// <summary>
+        /// Try to get the <see cref="PayloadHandle"/> for the decoration payload by the pair index
+        /// </summary>
+        /// <param name="decorationPairIndex">Pair index</param>
+        /// <param name="memAllocator">Memory manager that has the binary data</param>
+        /// <param name="nameArray">Result - name of the decoration</param>
+        /// <param name="dataHandle">Result - data of the decoration</param>
+        /// <returns>True if the decoration payload was found</returns>
         public bool TryGetDecorationPayload(int decorationPairIndex, ref LogMemoryManager memAllocator, out NativeArray<byte> nameArray, out PayloadHandle dataHandle)
         {
             var indx = decorationPairIndex * 2;

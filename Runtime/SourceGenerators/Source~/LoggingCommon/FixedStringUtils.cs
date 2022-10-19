@@ -1,3 +1,4 @@
+using LoggingCommon;
 using Microsoft.CodeAnalysis;
 using SourceGenerator.Logging.Declarations;
 
@@ -84,7 +85,7 @@ namespace SourceGenerator.Logging
             }
         }
 
-        public static FSType GetSmallestFixedStringTypeForMessage(string message, GeneratorExecutionContext context)
+        public static FSType GetSmallestFixedStringTypeForMessage(string message, ContextWrapper context)
         {
             var length = System.Text.Encoding.UTF8.GetByteCount(message);
 

@@ -17,8 +17,19 @@ namespace Unity.Logging.Sinks
         /// </summary>
         public int SinkId;
 
+        /// <summary>
+        /// True if Sink was initialized and can run 'Update'
+        /// </summary>
         protected bool IsInitialized;
+
+        /// <summary>
+        /// Logger's handle that owns the sink
+        /// </summary>
         protected LoggerHandle Handle;
+
+        /// <summary>
+        /// <see cref="SinkConfiguration"/> that was used to setup the sink
+        /// </summary>
         protected SinkConfiguration SystemConfig;
 
         /// <summary>
@@ -48,7 +59,7 @@ namespace Unity.Logging.Sinks
         /// <summary>
         /// Schedule update for this sink. Usually schedules an internal SinkJob.
         /// </summary>
-        /// <param name="@lock">Lock to access to LogController</param>
+        /// <param name="lock">Lock to access to LogController</param>
         /// <param name="dependency">Input dependency that should be done before this job</param>
         /// <returns>Job handle for the SinkJob</returns>
         public virtual JobHandle ScheduleUpdate(LogControllerScopedLock @lock, JobHandle dependency)
@@ -116,6 +127,10 @@ namespace Unity.Logging.Sinks
             return SystemConfig.MinLevel;
         }
 
+        /// <summary>
+        /// If any error happens - this method will self-log it and set IsInitialized to false, disabling the sink
+        /// </summary>
+        /// <param name="reason">User facing error message</param>
         protected void OnSinkFatalError(FixedString512Bytes reason)
         {
             Internal.Debug.SelfLog.OnSinkFatalError(this, reason);

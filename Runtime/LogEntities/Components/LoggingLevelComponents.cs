@@ -8,17 +8,29 @@ namespace Unity.Logging
     /// </summary>
     public enum LogLevel : byte
     {
-        // Log.Verbose
+        /// <summary>
+        /// Log.Verbose
+        /// </summary>
         Verbose,
-        // Log.Debug
+        /// <summary>
+        /// Log.Debug
+        /// </summary>
         Debug,
-        // Log.Info
+        /// <summary>
+        /// Log.Info
+        /// </summary>
         Info,
-        // Log.Warning
+        /// <summary>
+        /// Log.Warning
+        /// </summary>
         Warning,
-        // Log.Error
+        /// <summary>
+        /// Log.Error
+        /// </summary>
         Error,
-        // Log.Fatal
+        /// <summary>
+        /// Log.Fatal
+        /// </summary>
         Fatal
     }
 
@@ -50,17 +62,29 @@ namespace Unity.Logging
     /// </summary>
     public static class Consts
     {
-        // Log.Verbose
+        /// <summary>
+        /// Log.Verbose
+        /// </summary>
         public static readonly FixedString32Bytes VerboseString = "VERBOSE";
-        // Log.Debug
+        /// <summary>
+        /// Log.Debug
+        /// </summary>
         public static readonly FixedString32Bytes DebugString = "DEBUG";
-        // Log.Info
+        /// <summary>
+        /// Log.Info
+        /// </summary>
         public static readonly FixedString32Bytes InfoString = "INFO";
-        // Log.Warning
+        /// <summary>
+        /// Log.Warning
+        /// </summary>
         public static readonly FixedString32Bytes WarningString = "WARNING";
-        // Log.Error
+        /// <summary>
+        /// Log.Error
+        /// </summary>
         public static readonly FixedString32Bytes ErrorString = "ERROR";
-        // Log.Fatal
+        /// <summary>
+        /// Log.Fatal
+        /// </summary>
         public static readonly FixedString32Bytes FatalString = "FATAL";
     }
 

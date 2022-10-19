@@ -9,6 +9,7 @@ using System.Runtime.InteropServices;
 using System.Security;
 using System.Text;
 using System.Threading;
+using Unity.Burst;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Logging;
 using Unity.Profiling;
@@ -31,10 +32,19 @@ namespace Unity.Logging.Internal
         static readonly ProfilerMarker k_StackTraceSlowPathCapture = new ProfilerMarker($"StackTrace. Capture (slow path)");
         static readonly ProfilerMarker k_StackTraceSlowPathToString = new ProfilerMarker($"StackTrace. Convert to string  (slow path)");
 
+        /// <summary>
+        /// Initialize. Called internally by logging
+        /// </summary>
+        [BurstDiscard]
+        internal static void Initialize()
+        {
+            ReflectionHelper.Initialize();
+            StackTraceDataAnalyzer.GetProjectFolder(); // init current folder
+        }
+
         static StackTraceCapture()
         {
-            var _ = ReflectionHelper.Initialized;
-            StackTraceDataAnalyzer.GetProjectFolder(); // init current folder
+            Initialize();
         }
 
         private static ConcurrentBag<StackTraceData> s_StackTracePool;
@@ -50,7 +60,7 @@ namespace Unity.Logging.Internal
             return s_StackTracePool.TryTake(out var res) ? res : new StackTraceData();
         }
 
-        public static void ReleaseStackTrace(StackTraceData d)
+        internal static void ReleaseStackTrace(StackTraceData d)
         {
             d.Reset();
             s_StackTracePool.Add(d);
@@ -68,7 +78,7 @@ namespace Unity.Logging.Internal
         }
 
         [HideInStackTrace]
-        public static StackTraceData GetStackTrace()
+        internal static StackTraceData GetStackTrace()
         {
             using var marker = k_StackTraceCapture.Auto();
 
@@ -78,7 +88,7 @@ namespace Unity.Logging.Internal
             return data;
         }
 
-        public static void ToUnsafeTextStackTrace(StackTraceData data, ref UnsafeText result)
+        internal static void ToUnsafeTextStackTrace(StackTraceData data, ref UnsafeText result)
         {
             using var marker = k_StackTraceToString.Auto();
 
@@ -97,7 +107,7 @@ namespace Unity.Logging.Internal
         /// <summary>
         /// Lightweight stack trace data structure. Can be analyzed afterwards
         /// </summary>
-        public class StackTraceData
+        internal class StackTraceData
         {
             internal const bool NeedFileInfo = true;
 
@@ -523,11 +533,11 @@ namespace Unity.Logging.Internal
 
         private static class ReflectionHelper
         {
-            public static readonly ConstructorInfo Constructor;
+            public static ConstructorInfo Constructor;
 
-            internal static readonly MethodInfo GetNumberOfFrames;
-            internal static readonly MethodInfo GetMethodBase;
-            internal static readonly MethodInfo GetStackFramesInternal;
+            internal static MethodInfo GetNumberOfFrames;
+            internal static MethodInfo GetMethodBase;
+            internal static MethodInfo GetStackFramesInternal;
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             internal delegate void GetSourceLineInfoDelegate(Assembly assembly, string assemblyPath, IntPtr loadedPeAddress,
@@ -541,50 +551,74 @@ namespace Unity.Logging.Internal
 
             internal static GetSourceLineInfoDelegate GetSourceLineInfo;
             internal static GetSourceLineInfoDelegateNoAssembly GetSourceLineInfoNoAssembly;
-            internal static readonly FieldInfo RgiMethodToken;
-            internal static readonly FieldInfo RgAssemblyPath;
-            internal static readonly FieldInfo RgiLoadedPeSize;
-            internal static readonly FieldInfo RgAssembly;
-            internal static readonly FieldInfo RgLoadedPeAddress;
-            internal static readonly FieldInfo RgInMemoryPdbAddress;
-            internal static readonly FieldInfo RgiInMemoryPdbSize;
-            internal static readonly FieldInfo RgiIlOffset;
-            internal static readonly FieldInfo RgFilename;
-            internal static readonly FieldInfo RgiLineNumber;
-            internal static readonly FieldInfo RgiColumnNumber;
+            internal static FieldInfo RgiMethodToken;
+            internal static FieldInfo RgAssemblyPath;
+            internal static FieldInfo RgiLoadedPeSize;
+            internal static FieldInfo RgAssembly;
+            internal static FieldInfo RgLoadedPeAddress;
+            internal static FieldInfo RgInMemoryPdbAddress;
+            internal static FieldInfo RgiInMemoryPdbSize;
+            internal static FieldInfo RgiIlOffset;
+            internal static FieldInfo RgFilename;
+            internal static FieldInfo RgiLineNumber;
+            internal static FieldInfo RgiColumnNumber;
 
-            public static bool Initialized { get; }
+            public static bool Initialized => s_InitState == InitState.Success;
 
-            static ReflectionHelper()
+            enum InitState : byte
             {
+                NeverInitialized,
+                FailedInitialization,
+                Success
+            }
+            private static InitState s_InitState = InitState.NeverInitialized;
+
+            [BurstDiscard]
+            internal static void Initialize()
+            {
+                if (s_InitState != InitState.NeverInitialized) return;
+
+                s_InitState = InitState.FailedInitialization;
+
                 try
                 {
                     var stackFrameHelperType = typeof(object).Assembly.GetType("System.Diagnostics.StackFrameHelper");
-                    Constructor = stackFrameHelperType.GetConstructor(new[] { typeof(Thread) });
+                    if (stackFrameHelperType != null)
+                    {
+                        Constructor = stackFrameHelperType.GetConstructor(new[] { typeof(Thread) });
 
-                    GetNumberOfFrames = stackFrameHelperType.GetMethod("GetNumberOfFrames", BindingFlags.Instance | BindingFlags.Public);
-                    GetMethodBase = stackFrameHelperType.GetMethod("GetMethodBase", BindingFlags.Instance | BindingFlags.Public);
+                        GetNumberOfFrames = stackFrameHelperType.GetMethod("GetNumberOfFrames", BindingFlags.Instance | BindingFlags.Public);
+                        GetMethodBase = stackFrameHelperType.GetMethod("GetMethodBase", BindingFlags.Instance | BindingFlags.Public);
 
-                    RgiMethodToken = stackFrameHelperType.GetField("rgiMethodToken", BindingFlags.Instance | BindingFlags.NonPublic);
-                    RgAssemblyPath = stackFrameHelperType.GetField("rgAssemblyPath", BindingFlags.Instance | BindingFlags.NonPublic);
-                    RgAssembly = stackFrameHelperType.GetField("rgAssembly", BindingFlags.Instance | BindingFlags.NonPublic);
-                    RgLoadedPeAddress = stackFrameHelperType.GetField("rgLoadedPeAddress", BindingFlags.Instance | BindingFlags.NonPublic);
-                    RgiLoadedPeSize = stackFrameHelperType.GetField("rgiLoadedPeSize", BindingFlags.Instance | BindingFlags.NonPublic);
-                    RgInMemoryPdbAddress = stackFrameHelperType.GetField("rgInMemoryPdbAddress", BindingFlags.Instance | BindingFlags.NonPublic);
-                    RgiInMemoryPdbSize = stackFrameHelperType.GetField("rgiInMemoryPdbSize", BindingFlags.Instance | BindingFlags.NonPublic);
-                    RgiIlOffset = stackFrameHelperType.GetField("rgiILOffset", BindingFlags.Instance | BindingFlags.NonPublic);
-                    RgFilename = stackFrameHelperType.GetField("rgFilename", BindingFlags.Instance | BindingFlags.NonPublic);
-                    RgiLineNumber = stackFrameHelperType.GetField("rgiLineNumber", BindingFlags.Instance | BindingFlags.NonPublic);
-                    RgiColumnNumber = stackFrameHelperType.GetField("rgiColumnNumber", BindingFlags.Instance | BindingFlags.NonPublic);
+                        RgiMethodToken = stackFrameHelperType.GetField("rgiMethodToken", BindingFlags.Instance | BindingFlags.NonPublic);
+                        RgAssemblyPath = stackFrameHelperType.GetField("rgAssemblyPath", BindingFlags.Instance | BindingFlags.NonPublic);
+                        RgAssembly = stackFrameHelperType.GetField("rgAssembly", BindingFlags.Instance | BindingFlags.NonPublic);
+                        RgLoadedPeAddress = stackFrameHelperType.GetField("rgLoadedPeAddress", BindingFlags.Instance | BindingFlags.NonPublic);
+                        RgiLoadedPeSize = stackFrameHelperType.GetField("rgiLoadedPeSize", BindingFlags.Instance | BindingFlags.NonPublic);
+                        RgInMemoryPdbAddress = stackFrameHelperType.GetField("rgInMemoryPdbAddress", BindingFlags.Instance | BindingFlags.NonPublic);
+                        RgiInMemoryPdbSize = stackFrameHelperType.GetField("rgiInMemoryPdbSize", BindingFlags.Instance | BindingFlags.NonPublic);
+                        RgiIlOffset = stackFrameHelperType.GetField("rgiILOffset", BindingFlags.Instance | BindingFlags.NonPublic);
+                        RgFilename = stackFrameHelperType.GetField("rgFilename", BindingFlags.Instance | BindingFlags.NonPublic);
+                        RgiLineNumber = stackFrameHelperType.GetField("rgiLineNumber", BindingFlags.Instance | BindingFlags.NonPublic);
+                        RgiColumnNumber = stackFrameHelperType.GetField("rgiColumnNumber", BindingFlags.Instance | BindingFlags.NonPublic);
 
-                    GetStackFramesInternal = typeof(StackTrace).GetMethod("GetStackFramesInternal", BindingFlags.Static | BindingFlags.NonPublic);
+                        GetStackFramesInternal = typeof(StackTrace).GetMethod("GetStackFramesInternal", BindingFlags.Static | BindingFlags.NonPublic);
 
-                    Initialized = TryGetNetCoreDelegate() || TryGetNetStandardDelegate();
+                        if (TryGetNetCoreDelegate() || TryGetNetStandardDelegate())
+                        {
+                            s_InitState = InitState.Success;
+                        }
+                    }
                 }
                 catch
                 {
-                    Initialized = false;
+                    // ignored
                 }
+            }
+
+            static ReflectionHelper()
+            {
+                Initialize();
             }
 
             private static bool TryGetNetStandardDelegate()
@@ -666,7 +700,7 @@ namespace Unity.Logging.Internal
         }
     }
 
-    public class SlowStackTraceWrapper : StackTrace, StackTraceCapture.StackTraceDataAnalyzer.IStackTrace
+    internal class SlowStackTraceWrapper : StackTrace, StackTraceCapture.StackTraceDataAnalyzer.IStackTrace
     {
         public SlowStackTraceWrapper() : base(1, true)
         {

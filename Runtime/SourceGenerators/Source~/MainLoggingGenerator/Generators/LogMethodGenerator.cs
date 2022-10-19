@@ -20,16 +20,17 @@ namespace SourceGenerator.Logging
     {
         private LogMethodGenerator() {}
 
-        public static bool Execute(in GeneratorExecutionContext context, ulong assemblyHash, out LogCallsCollection invokeData, out StringBuilder generatedCode)
+        public static bool Execute(in ContextWrapper context, ulong assemblyHash, ImmutableArray<CustomMirrorStruct> userTypes, out LogCallsCollection invokeData, out string generatedCode)
         {
             using var _ = new Profiler.Auto("LogMethodGenerator.Execute");
 
             invokeData = new LogCallsCollection();
-            generatedCode = new StringBuilder();
+            generatedCode = "";
 
             var generator = new LogMethodGenerator
             {
-                m_Context = context
+                m_Context = context,
+                m_UserTypes = userTypes
             };
 
             if (!generator.ExtractLogInvocationData(context, out var data))
@@ -40,14 +41,14 @@ namespace SourceGenerator.Logging
             return true;
         }
 
-        private bool ExtractLogInvocationData(GeneratorExecutionContext context, out LogCallsCollection data)
+        private bool ExtractLogInvocationData(ContextWrapper context, out LogCallsCollection data)
         {
             using var _ = new Profiler.Auto("LogMethodGenerator.ExtractLogInvocationData");
 
             data = new LogCallsCollection();
 
             // Get all the instances of calls to Log.Info from the syntax processor
-            var syntaxReceiver = (LogCallFinder)m_Context.SyntaxReceiver;
+            var syntaxReceiver = context.UserData as LogCallFinder;
             if (syntaxReceiver == null)
             {
                 Debug.LogVerbose(m_Context, $"[ExtractLogCall][FAIL] syntaxReceiver == null");
@@ -63,7 +64,7 @@ namespace SourceGenerator.Logging
 
             for (var i = 0; i < syntaxReceiver.LogCalls.Count; i++)
             {
-                context.CancellationToken.ThrowIfCancellationRequested();
+                context.ThrowIfCancellationRequested();
 
                 var logCall = syntaxReceiver.LogCalls[i];
                 var logCallLevel = syntaxReceiver.LogCallsLevel[i];
@@ -101,7 +102,7 @@ namespace SourceGenerator.Logging
             return true;
         }
 
-        private void AnalyzeMessageStringWarnings(GeneratorExecutionContext context, LogCallKind level, in LogCallData invokeInstData)
+        private void AnalyzeMessageStringWarnings(ContextWrapper context, LogCallKind level, in LogCallData invokeInstData)
         {
             if (level == LogCallKind.Decorate) return;
 
@@ -209,7 +210,7 @@ namespace SourceGenerator.Logging
             }
         }
 
-        private bool ExtractLogCall(GeneratorExecutionContext context, InvocationExpressionSyntax textLoggerWriteCall, LogCallKind logCallKind, out LogCallData data)
+        private bool ExtractLogCall(ContextWrapper context, InvocationExpressionSyntax textLoggerWriteCall, LogCallKind logCallKind, out LogCallData data)
         {
             using var _ = new Profiler.Auto("LogMethodGenerator.ExtractLogCall");
 
@@ -366,7 +367,25 @@ namespace SourceGenerator.Logging
 
             Profiler.End();
 
+            var userOverload = GetUserOverload(typeInfo);
+            if (userOverload.IsCreated)
+            {
+                return LogCallArgumentData.UserDefinedType(typeInfo, arg, userOverload, out qualifiedName);
+            }
+
             return ArgumentTypeExtractor.Extract(m_Context, expression, typeInfo, out qualifiedName);
+        }
+
+        private CustomMirrorStruct GetUserOverload(TypeInfo typeInfo)
+        {
+            foreach (var userType in m_UserTypes)
+            {
+                if (userType.OriginalStructTypeInfo.Type != null && userType.OriginalStructTypeInfo.Type.Equals(typeInfo.Type, SymbolEqualityComparer.Default))
+                    return userType;
+                if (userType.WrapperStructTypeInfo != null && userType.WrapperStructTypeInfo.Equals(typeInfo.Type, SymbolEqualityComparer.Default))
+                    return userType;
+            }
+            return default;
         }
 
         private bool ExtractLogCallArgumentAndRegister(SemanticModel model, LogCallKind callKind, ArgumentSyntax arg, out TypeInfo argTypeInfo, out LogCallArgumentData data)
@@ -386,7 +405,7 @@ namespace SourceGenerator.Logging
             return data.IsValid;
         }
 
-        private bool GenerateDefaultMessageData(GeneratorExecutionContext context, ITypeSymbol typeSymbol, int numArgs, out LogCallMessageData data)
+        private bool GenerateDefaultMessageData(ContextWrapper context, ITypeSymbol typeSymbol, int numArgs, out LogCallMessageData data)
         {
             using var _ = new Profiler.Auto("LogMethodGenerator.GenerateDefaultMessageData");
 
@@ -417,7 +436,7 @@ namespace SourceGenerator.Logging
             return data.IsValid;
         }
 
-        public static bool IsValidFixedStringType(GeneratorExecutionContext m_Context, ITypeSymbol symbol, out FixedStringUtils.FSType fsType)
+        public static bool IsValidFixedStringType(ContextWrapper m_Context, ITypeSymbol symbol, out FixedStringUtils.FSType fsType)
         {
             // Check if this type is a valid FixedString type; perform some extra error checking if not.
             fsType = FixedStringUtils.GetFSType(symbol.Name);
@@ -568,7 +587,8 @@ namespace SourceGenerator.Logging
             return result;
         }
 
-        private GeneratorExecutionContext                       m_Context;
+        private ContextWrapper                       m_Context;
         private readonly Dictionary<LogCallKind, ArgumentRegistry> m_ArgumentRegistryLevel = new();
+        public ImmutableArray<CustomMirrorStruct> m_UserTypes;
     }
 }

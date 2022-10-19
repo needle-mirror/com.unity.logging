@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Text;
 using LoggingCommon;
 using Microsoft.CodeAnalysis;
@@ -9,7 +10,7 @@ namespace SourceGenerator.Logging
 {
     internal static class LogParserEmitter
     {
-        public static StringBuilder Emit(in GeneratorExecutionContext context, in LogStructureTypesData structData, ulong assemblyHash)
+        public static StringBuilder Emit(in ContextWrapper context, in LogStructureTypesData structData, ulong assemblyHash)
         {
             using var _ = new Profiler.Auto("LogParserEmitter.Emit");
 
@@ -91,6 +92,9 @@ namespace Unity.Logging
                 (11, "ushort"),
                 (12, "sbyte"),
                 (13, "byte"),
+
+                (14, "IntPtr"),
+                (15, "UIntPtr"),
             };
 
             foreach (var (typeId, typeName) in defaultSpecialTypes)
@@ -114,10 +118,14 @@ namespace Unity.Logging
 
             foreach (var st in types)
             {
+                if (st.IsUserType)
+                    sb.Append(@"
+                // user type");
+
                 sb.Append($@"
                 case {st.TypeId}:
                     typeLength = UnsafeUtility.SizeOf<{st.FullGeneratedTypeName}>();
-                    success = length >= typeLength && mem.WriteFormattedOutput<{st.FullGeneratedTypeName}>(ref hstring, ref formatter, ref memAllocator, ref currArgSlot);
+                    success = length >= typeLength && mem.AppendToUnsafeText<{st.FullGeneratedTypeName}>(ref hstring, ref formatter, ref memAllocator, ref currArgSlot);
                     break;
 ");
             }

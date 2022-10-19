@@ -8,25 +8,31 @@ namespace SourceGenerator.Logging
     public readonly struct LogStructureDefinitionData
     {
         public readonly ITypeSymbol                         Symbol;
+        public readonly uint                                LocalId;
         public readonly UInt64                              TypeId;
         public readonly string                              FullTypeName;
-        public readonly string                              UniqueId;
         public readonly string                              GeneratedTypeName;
         public readonly string                              FullGeneratedTypeName;
-        public readonly string                              Formatter;
         public readonly string                              ContainingNamespace;
         public readonly List<LogStructureFieldData>         FieldData;
+        public readonly CustomMirrorStruct                 UserDefinedMirrorStruct;
+
+        public readonly bool ShouldBeMarkedUnsafe;
 
         public bool IsValid => Symbol != null && TypeId != 0;
-        public bool IsTaggedForLogging => !string.IsNullOrEmpty(Formatter);
         public bool ContainsPayloads => FieldData.Any(f => f.NeedsPayload);
+        public bool IsUserType => UserDefinedMirrorStruct.IsCreated;
 
         public LogStructureDefinitionData(ulong assemblyHash, ITypeSymbol typeSymbol, uint localId, in LogCallArgumentData argInstance, List<LogStructureFieldData> fields)
         {
+            UserDefinedMirrorStruct = default;
             Symbol = typeSymbol;
             FullTypeName = Common.GetFullyQualifiedTypeNameFromSymbol(typeSymbol);
 
+            LocalId = localId;
             TypeId = Common.CreateStructTypeId(assemblyHash, localId);
+
+            ShouldBeMarkedUnsafe = fields.Any(f => f.IsUnsafe);
 
             // Typically the generated type name is produced by LogCallInvocationArgumentData, when analyzing arguments passed into a Log.Info call,
             // in which case we simply copy over those values. However, when dealing with nested structs, we may have types that aren't directly used as
@@ -34,7 +40,6 @@ namespace SourceGenerator.Logging
 
             if (argInstance.IsValid)
             {
-                UniqueId = argInstance.UniqueId;
                 GeneratedTypeName = argInstance.GeneratedTypeName;
                 FullGeneratedTypeName = argInstance.FullGeneratedTypeName;
             }
@@ -42,7 +47,6 @@ namespace SourceGenerator.Logging
             {
                 var dummyArg = new LogCallArgumentData(typeSymbol, "", "", null);
 
-                UniqueId = dummyArg.UniqueId;
                 GeneratedTypeName = dummyArg.GeneratedTypeName;
                 FullGeneratedTypeName = dummyArg.FullGeneratedTypeName;
             }
@@ -50,8 +54,26 @@ namespace SourceGenerator.Logging
             // Parse out the namespace from the full type name
             ContainingNamespace = FullGeneratedTypeName.Replace("global::", "").Replace("." + GeneratedTypeName, "");
 
-            Formatter = "";
             FieldData = fields;
+        }
+
+        public LogStructureDefinitionData(ulong assemblyHash, ITypeSymbol typeSymbol, uint localId, in LogCallArgumentData argInstance, CustomMirrorStruct userDefinedMirrorStruct)
+        {
+            UserDefinedMirrorStruct = userDefinedMirrorStruct;
+            Symbol = typeSymbol;
+            FullTypeName = Common.GetFullyQualifiedTypeNameFromSymbol(typeSymbol);
+
+            LocalId = localId;
+            TypeId = userDefinedMirrorStruct.TypeId;
+
+            GeneratedTypeName = argInstance.GeneratedTypeName;
+            FullGeneratedTypeName = argInstance.FullGeneratedTypeName;
+
+            // Parse out the namespace from the full type name
+            ContainingNamespace = FullGeneratedTypeName.Replace("global::", "").Replace("." + GeneratedTypeName, "");
+
+            FieldData = new List<LogStructureFieldData>();
+            ShouldBeMarkedUnsafe = false;
         }
     }
 }

@@ -21,6 +21,10 @@ namespace Unity.Logging
     public static class LogFormatterJson
     {
         private static FormatterStruct s_Formatter = default;
+
+        /// <summary>
+        /// FormatterStruct that can format JSON
+        /// </summary>
         public static FormatterStruct Formatter
         {
             get
@@ -42,6 +46,7 @@ namespace Unity.Logging
         /// Parses the LogMessage to Json UnsafeText
         /// </summary>
         /// <param name="logEvent">LogMessage to parse</param>
+        /// <param name="formatter">Formatter that sink is using</param>
         /// <param name="outTemplate">Unused</param>
         /// <param name="messageBuffer">Memory to store the message</param>
         /// <param name="memoryManager">LogMemoryManager to get data from</param>
@@ -87,7 +92,7 @@ namespace Unity.Logging
             return jsonOutput.Length;
         }
 
-        public static unsafe bool WriteJsonMessage(in LogMessage messageData, ref FormatterStruct formatter, ref HeaderData headerData, ref UnsafeText messageOutput, ref FixedString512Bytes errorMessage, ref LogMemoryManager memAllocator, Allocator allocator)
+        private static unsafe bool WriteJsonMessage(in LogMessage messageData, ref FormatterStruct formatter, ref HeaderData headerData, ref UnsafeText messageOutput, ref FixedString512Bytes errorMessage, ref LogMemoryManager memAllocator, Allocator allocator)
         {
             var stackTraceIdData = messageData.StackTraceId;
             var timestamp = messageData.Timestamp;

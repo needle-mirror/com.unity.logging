@@ -3,8 +3,7 @@
     "rootNamespace": "",
     "references": [
         "Unity.Burst",
-        "Unity.Collections",
-        "Unity.Jobs"
+        "Unity.Collections"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
@@ -16,23 +15,13 @@
     "versionDefines": [
         {
             "name": "Unity",
-            "expression": "2021.2.8",
-            "define": "USE_BASELIB"
-        },
-        {
-            "name": "Unity",
-            "expression": "2021.2.8",
-            "define": "USE_BASELIB_FILEIO"
-        },
-        {
-            "name": "Unity",
-            "expression": "[2020.3.26,2020.3.99]",
-            "define": "USE_BASELIB"
-        },
-        {
-            "name": "Unity",
             "expression": "2022.2.0a15",
             "define": "UNITY_CONSOLE_API"
+        },
+        {
+            "name": "Unity",
+            "expression": "2022.3.0a1",
+            "define": "UNITY_HAS_UTF8_VIEW"
         }
     ],
     "noEngineReferences": false

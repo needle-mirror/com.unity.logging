@@ -4,6 +4,13 @@
 
 #if UNITY_CONSOLE_API && UNITY_EDITOR
 #define USE_CONSOLE_SINK
+
+#if UNITY_HAS_UTF8_VIEW
+using UTF8View = UnityEngine.UTF8StringView;
+#else
+using UTF8View = UnityEditor.LogEntryUTF8StringView;
+#endif
+
 #endif
 
 using System;
@@ -15,14 +22,14 @@ using Unity.Logging.Internal.Debug;
 
 namespace Unity.Logging.Sinks
 {
+    /// <summary>
+    /// Extension class for LoggerWriterConfig .UnityEditorConsole
+    /// </summary>
     public static class UnityEditorConsoleSinkExt
     {
         /// <summary>
         /// Write logs to the UnityEditor's Console window. Does nothing in a standalone build or in Unity prior to 2022.2
         /// </summary>
-        /// <remarks>
-        /// If 'outputTemplate' has {Stacktrace} it will be ignored. Unity Console shows stacktrace always after the message.
-        /// </remarks>
         /// <param name="writeTo">Logger config</param>
         /// <param name="captureStackTrace">True if stack traces should be captured</param>
         /// <param name="minLevel">Minimal level of logs for this particular sink. Null if common level should be used</param>
@@ -35,35 +42,45 @@ namespace Unity.Logging.Sinks
         {
             var config = new UnityEditorConsoleSink.Configuration(writeTo, captureStackTrace, minLevel, outputTemplate);
 
-            // Doesn't make sense to have {Stacktrace} in the template. See 'remarks'
-            ref var template = ref config.OutputTemplate;
-            var substr = (FixedString32Bytes)"{Stacktrace}";
-            for (;;)
-            {
-                var stacktrace = template.IndexOf(substr);
-                if (stacktrace == -1)
-                    break;
-                var patchedTemplate = template.ToString().Replace(substr.ToString(), "");
-                config.OutputTemplate = new FixedString512Bytes(patchedTemplate);
-            }
-
             return writeTo.AddSinkConfig(config);
         }
     }
 
+    /// <summary>
+    /// UnityEditor's Console sink class
+    /// </summary>
     [BurstCompile]
     public class UnityEditorConsoleSink : SinkSystemBase
     {
+        /// <summary>
+        /// Configuration for string sink
+        /// </summary>
         public class Configuration : SinkConfiguration
         {
+            /// <summary>
+            /// Creates the UnityEditorConsoleSink
+            /// </summary>
+            /// <param name="logger">Logger that owns sink</param>
+            /// <returns>SinkSystemBase</returns>
             public override SinkSystemBase CreateSinkInstance(Logger logger) => CreateAndInitializeSinkInstance<UnityEditorConsoleSink>(logger, this);
 
+            /// <summary>
+            /// Constructor for the configuration
+            /// </summary>
+            /// <param name="writeTo">Logger config</param>
+            /// <param name="captureStackTraceOverride">True if stack traces should be captured. Null if default</param>
+            /// <param name="minLevelOverride">Minimal level of logs for this particular sink. Null if common level should be used</param>
+            /// <param name="outputTemplateOverride">Output message template for this particular sink. Null if common template should be used</param>
             public Configuration(LoggerWriterConfig writeTo,
                                  bool? captureStackTraceOverride = null, LogLevel? minLevelOverride = null, FixedString512Bytes? outputTemplateOverride = null)
                 : base(writeTo, formatter: default, captureStackTraceOverride, minLevelOverride, outputTemplateOverride)
             {}
         }
 
+        /// <summary>
+        /// Creates <see cref="LogController.SinkStruct"/>
+        /// </summary>
+        /// <returns>SinkStruct</returns>
         public override LogController.SinkStruct ToSinkStruct()
         {
 #if USE_CONSOLE_SINK
@@ -104,7 +121,7 @@ namespace Unity.Logging.Sinks
                     var messageStart = messageBuffer.Length;
 
                     ref var formatter = ref UnsafeUtility.AsRef<FormatterStruct>(userData.ToPointer());
-                    var success = LogFormatterText.WriteTemplatedMessage(ref outTemplate, in logEvent, ref formatter, ref headerData, ref messageBuffer, ref errorMessage, ref memAllocator);
+                    var success = LogFormatterText.WriteMessage(in logEvent, ref formatter, ref headerData, ref messageBuffer, ref errorMessage, ref memAllocator);
 
                     var messageLength = messageBuffer.Length - messageStart;
 
@@ -126,9 +143,9 @@ namespace Unity.Logging.Sinks
                     var logEntry = new UnityEditor.LogEntryStruct
                     {
                         mode = mode,
-                        timestamp = new UnityEditor.LogEntryUTF8StringView(&messageBuffer.GetUnsafePtr()[timestampStart], timestampLength),
-                        callstack = new UnityEditor.LogEntryUTF8StringView(&messageBuffer.GetUnsafePtr()[stacktraceStart], stacktraceLength),
-                        message = new UnityEditor.LogEntryUTF8StringView(&messageBuffer.GetUnsafePtr()[messageStart], messageLength),
+                        timestamp = new UTF8View(&messageBuffer.GetUnsafePtr()[timestampStart], timestampLength),
+                        callstack = new UTF8View(&messageBuffer.GetUnsafePtr()[stacktraceStart], stacktraceLength),
+                        message = new UTF8View(&messageBuffer.GetUnsafePtr()[messageStart], messageLength),
                     };
 
                     UnityEditor.ConsoleWindow.AddMessage(ref logEntry);
