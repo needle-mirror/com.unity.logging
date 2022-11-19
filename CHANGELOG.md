@@ -1,3 +1,7 @@
+# Changelog
+
+## [1.0.0-pre.11] - 2022-11-19
+* Release preparations, no functional changes.
 
 ## [1.0.0-exp.7] - 2022-10-19
 
@@ -21,6 +25,7 @@
 
 * Unity 2023 compatibility
 * Initialization order because of cctor is not called in some Burst cases
+
 
 ## [1.0.0-exp.6] - 2022-09-21
 
@@ -88,11 +93,6 @@
 * Reserved argument names parsed incorrectly
 * Crash in some cases when a user calls Log. from non-main thread first (so cctor is called on non-main thread)
 * HideInStacktrace now works for burst's directcalls
-
-### Security
-
-
-
 
 ## [0.4.0] - 2021-09-17
 

@@ -1,12 +1,12 @@
 {
   "name": "com.unity.logging",
   "displayName": "Unity Logging",
-  "version": "1.0.0-exp.7",
+  "version": "1.0.0-pre.11",
   "unity": "2022.2",
-  "unityRelease": "0b5",
+  "unityRelease": "0f1",
   "dependencies": {
     "com.unity.burst": "1.7.4",
-    "com.unity.collections": "2.1.0-exp.4"
+    "com.unity.collections": "2.1.0-pre.2"
   },
   "relatedPackages": {
     "com.unity.logging.tests": "1.0.0"
@@ -18,12 +18,12 @@
     "unity"
   ],
   "upmCi": {
-    "footprint": "b716e60ebfbb212aca911b82858bb75b3b13edbb"
+    "footprint": "48182a8f9c7551b15915e57930822176d721de05"
   },
   "repository": {
     "url": "https://github.cds.internal.unity3d.com/unity/dots.git",
     "type": "git",
-    "revision": "3f0a7e39227bd97f1239a6505a9449425fecfe1e"
+    "revision": "4a4f5ab3e6c177cb189b32e95ea599cf64f35b4d"
   },
   "samples": [
     {
