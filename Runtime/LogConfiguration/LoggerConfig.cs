@@ -39,7 +39,7 @@ namespace Unity.Logging
     public class LoggerConfig
     {
         private FixedString512Bytes m_CurrentTemplate = "{Timestamp} | {Level} | {Message}";
-        private bool m_CurrentCaptureStacktrace = false;
+        private bool m_CurrentCaptureStacktrace = true;
         /// <summary>
         /// Set minimal <see cref="LogLevel"/> that will be processed by the <see cref="Logger"/>
         /// </summary>

@@ -31,20 +31,22 @@ namespace Unity.Logging
             // This call is in 'BeforeSceneLoad' (so after BeforeSplashScreen), so user is able to create their own Logger instead
             if (LoggerManager.Logger == null)
             {
-                // if user didn't do that - a default one is created
-                var logDir = GetCurrentAbsoluteLogDirectory();
-
                 LoggerManager.Logger = new LoggerConfig()
                                                   .SyncMode.FatalIsSync()
                                                   .MinimumLevel.Debug()
                                                   .CaptureStacktrace()
                                                   .OutputTemplate("[{Timestamp}] {Level} | {Message}{NewLine}{Stacktrace}")
-                                                  .WriteTo.JsonFile(Path.Combine(logDir, "Output.log.json"))
+#if !PLATFORM_SWITCH
+                                                  .WriteTo.JsonFile(Path.Combine(GetCurrentAbsoluteLogDirectory(), "Output.log.json"))
+#endif
+
 #if UNITY_CONSOLE_API
                                                   // if UnityEditor.ConsoleWindow.AddMessage API exists - use it
-                                                  .WriteTo.File(Path.Combine(logDir, "Output.log"))
-                                                                    .WriteTo.StdOut()
-                                                                    .WriteTo.UnityEditorConsole()
+    #if !PLATFORM_SWITCH
+                                                  .WriteTo.File(Path.Combine(GetCurrentAbsoluteLogDirectory(), "Output.log"))
+    #endif
+                                                  .WriteTo.StdOut()
+                                                  .WriteTo.UnityEditorConsole()
 #else
                                                   // if not - fallback to UnityEngine.Debug.Log sink
                                                   .WriteTo.UnityDebugLog()

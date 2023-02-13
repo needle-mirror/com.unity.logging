@@ -44,7 +44,7 @@ namespace Unity.Logging
         internal SpinLockReadWrite   m_AllocationLock;
 
 
-#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
         // These safety handles control read/write access for returned NativeArray "views"
         internal AtomicSafetyHandle  m_BlockReadOnlyHandle;
         internal AtomicSafetyHandle  m_BlockReadWriteHandle;
@@ -125,7 +125,9 @@ namespace Unity.Logging
 
             if (capacity < MinimumCapacity || capacity > MaximumCapacity)
                 throw new ArgumentOutOfRangeException(nameof(capacity), "Capacity must be within minimum and maximum sizes.");
+#endif
 
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
             // AtomicSafetyHandles are read/write by default
             m_BlockReadWriteHandle = AtomicSafetyHandle.Create();
 
@@ -161,10 +163,11 @@ namespace Unity.Logging
                 return;
 
 #if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
-
             if (!UnsafeUtility.IsValidAllocator(m_Allocator))
                 throw new InvalidOperationException("The RingBuffer can not be Disposed because it was not allocated with a valid allocator.");
+#endif
 
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
             AtomicSafetyHandle.Release(m_BlockReadWriteHandle);
             AtomicSafetyHandle.Release(m_BlockReadOnlyHandle);
 #endif
@@ -273,7 +276,7 @@ namespace Unity.Logging
             // Create a NativeArray as a view into this new block, which is passed out to the user
             // This array is given read/write access automatically, but by default arrays retrieved later (using the handle) will be read only
             payloadArray = NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<byte>(payload, (int)requestedSize, Allocator.Invalid);
-#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
             NativeArrayUnsafeUtility.SetAtomicSafetyHandle(ref payloadArray, m_BlockReadWriteHandle);
 #endif
             return true;
@@ -381,7 +384,7 @@ namespace Unity.Logging
 
             // Payload block handle is good; create a NativeArray to reference into the Payload and set read/write access according to passed in parameter
             blockArray = NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<byte>(payload, header->PayloadSize, Allocator.None);
-#if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
             NativeArrayUnsafeUtility.SetAtomicSafetyHandle(ref blockArray, readWriteAccess ? m_BlockReadWriteHandle : m_BlockReadOnlyHandle);
 #endif
             return true;

@@ -469,7 +469,7 @@ namespace Unity.Logging.Internal
                         }
                     }
 
-                    sb.Append("\n");
+                    sb.Append(Environment.NewLine);
                 }
             }
 

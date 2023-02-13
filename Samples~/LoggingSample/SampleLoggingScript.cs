@@ -18,19 +18,21 @@ namespace Samples
         {
             Log.Logger = new Logger(new LoggerConfig()
                 .MinimumLevel.Debug()
-                .OutputTemplate("{Timestamp} - {Level} - {Message}")
-                .WriteTo.File("LogName.log", minLevel: LogLevel.Verbose)
+                .WriteTo.File("LogName.log", minLevel: LogLevel.Verbose, formatter: LogFormatterJson.Formatter)
                 .WriteTo.StdOut(outputTemplate: "{Level} || {Timestamp} || {Message}"));
 
 
             SelfLog.SetMode(SelfLog.Mode.EnabledInUnityEngineDebugLogError);
 
-            Log.Verbose("Hello Verbose {0}", 42);                                                                  // file only
-            Log.Debug("Hello Debug");                                                                                  // console & file
-            Log.Info("Hello Info");                                                                                    // console & file
-            Log.Warning("Hello Warning");                                                                              // console & file
-            Log.Error("Hello Error");                                                                                  // console & file
-            Log.Fatal("Hello Fatal. That was {Level}");
+            using (var scope = Log.Decorate("Source", "Awake"))
+            {
+                Log.Verbose("Hello Verbose {0}", 42); // file only
+                Log.Debug("Hello Debug");             // console & file
+                Log.Info("Hello Info");               // console & file
+                Log.Warning("Hello Warning");         // console & file
+                Log.Error("Hello Error");             // console & file
+                Log.Fatal("Hello Fatal. That was {Level}");
+            }
         }
 
         void Update()

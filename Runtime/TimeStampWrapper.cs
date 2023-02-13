@@ -21,6 +21,9 @@ namespace Unity.Logging.Internal
     [HideInStackTrace]
     public struct TimeStampWrapper
     {
+        struct LocalKey { }
+        struct LocalConsoleKey { }
+
         /// <summary>
         /// Defines a delegate to capture the timestamp
         /// </summary>
@@ -136,6 +139,8 @@ namespace Unity.Logging.Internal
             TimeStampManager.Initialize();
 
             Burst2ManagedCall<ToUnsafeTextTimestampDelegate, TimeStampWrapper>.Init(ToUnsafeTextTimeUTC);
+            Burst2ManagedCall<ToUnsafeTextTimestampDelegate, LocalKey>.Init(ToUnsafeTextTimeLocalTimeZone);
+            Burst2ManagedCall<ToUnsafeTextTimestampDelegate, LocalConsoleKey>.Init(ToUnsafeTextTimeLocalTimeZoneConsole);
             Burst2ManagedCall<ToFixedStringFileNameDelegate, TimeStampWrapper>.Init(ToFixedStringFileName);
         }
 
@@ -143,10 +148,30 @@ namespace Unity.Logging.Internal
         [AOT.MonoPInvokeCallback(typeof(ToUnsafeTextTimestampDelegate))]
         private static int ToUnsafeTextTimeUTC(long timestampUTCNanoseconds, ref UnsafeText result)
         {
-            var dateTime = new DateTime(NanosecToDateTimeTicks(timestampUTCNanoseconds));
+            var dateTime = new DateTime(NanosecToDateTimeTicks(timestampUTCNanoseconds), DateTimeKind.Utc);
 
             var n = result.Length;
             result.Append(dateTime.ToString(TimestampFormat));
+            return result.Length - n;
+        }
+
+        [AOT.MonoPInvokeCallback(typeof(ToUnsafeTextTimestampDelegate))]
+        private static int ToUnsafeTextTimeLocalTimeZone(long timestampUTCNanoseconds, ref UnsafeText result)
+        {
+            var dateTime = new DateTime(NanosecToDateTimeTicks(timestampUTCNanoseconds), DateTimeKind.Utc);
+
+            var n = result.Length;
+            result.Append(dateTime.ToLocalTime().ToString(TimestampFormat));
+            return result.Length - n;
+        }
+
+        [AOT.MonoPInvokeCallback(typeof(ToUnsafeTextTimestampDelegate))]
+        private static int ToUnsafeTextTimeLocalTimeZoneConsole(long timestampUTCNanoseconds, ref UnsafeText result)
+        {
+            var dateTime = new DateTime(NanosecToDateTimeTicks(timestampUTCNanoseconds), DateTimeKind.Utc);
+
+            var n = result.Length;
+            result.Append(dateTime.ToLocalTime().ToString("HH:mm:ss.fff"));
             return result.Length - n;
         }
 
@@ -181,7 +206,7 @@ namespace Unity.Logging.Internal
         }
 
         /// <summary>
-        /// Writes human-readable timestamp representation into buffer
+        /// Writes human-readable timestamp representation into buffer as UTC using TimestampFormat
         /// </summary>
         /// <param name="timestamp">UTC timestamp in nanoseconds to write</param>
         /// <param name="messageOutput">UnsafeText to write to</param>
@@ -189,6 +214,46 @@ namespace Unity.Logging.Internal
         public static int GetFormattedTimeStampString(long timestamp, ref UnsafeText messageOutput)
         {
             var ptr = Burst2ManagedCall<ToUnsafeTextTimestampDelegate, TimeStampWrapper>.Ptr();
+
+#if LOGGING_USE_UNMANAGED_DELEGATES
+            unsafe
+            {
+                return ((delegate * unmanaged[Cdecl] <long, ref UnsafeText, int>)ptr.Value)(timestamp, ref messageOutput);
+            }
+#else
+            return ptr.Invoke(timestamp, ref messageOutput);
+#endif
+        }
+
+        /// <summary>
+        /// Writes human-readable timestamp representation into buffer as Local time using TimestampFormat
+        /// </summary>
+        /// <param name="timestamp">UTC timestamp in nanoseconds to write</param>
+        /// <param name="messageOutput">UnsafeText to write to</param>
+        /// <returns>Length written to the buffer</returns>
+        public static int GetFormattedTimeStampStringLocalTime(long timestamp, ref UnsafeText messageOutput)
+        {
+            var ptr = Burst2ManagedCall<ToUnsafeTextTimestampDelegate, LocalKey>.Ptr();
+
+#if LOGGING_USE_UNMANAGED_DELEGATES
+            unsafe
+            {
+                return ((delegate * unmanaged[Cdecl] <long, ref UnsafeText, int>)ptr.Value)(timestamp, ref messageOutput);
+            }
+#else
+            return ptr.Invoke(timestamp, ref messageOutput);
+#endif
+        }
+
+        /// <summary>
+        /// Writes human-readable timestamp representation into buffer as Local time, HH:MM:SS
+        /// </summary>
+        /// <param name="timestamp">UTC timestamp in nanoseconds to write</param>
+        /// <param name="messageOutput">UnsafeText to write to</param>
+        /// <returns>Length written to the buffer</returns>
+        public static int GetFormattedTimeStampStringLocalTimeForConsole(long timestamp, ref UnsafeText messageOutput)
+        {
+            var ptr = Burst2ManagedCall<ToUnsafeTextTimestampDelegate, LocalConsoleKey>.Ptr();
 
 #if LOGGING_USE_UNMANAGED_DELEGATES
             unsafe

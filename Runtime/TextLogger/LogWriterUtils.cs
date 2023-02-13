@@ -333,7 +333,7 @@ namespace Unity.Logging
         }
 
         /// <summary>
-        /// Writes Timestamp to the UnsafeText
+        /// Writes Timestamp to the UnsafeText as UTC
         /// </summary>
         /// <param name="timestamp">Timestamp to write</param>
         /// <param name="messageOutput">Where to write to</param>
@@ -355,6 +355,38 @@ namespace Unity.Logging
                 if (length <= 0)
                     return false;
             }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Writes Timestamp to the UnsafeText in Local time zone
+        /// </summary>
+        /// <param name="timestamp">Timestamp to write</param>
+        /// <param name="messageOutput">Where to write to</param>
+        /// <returns>True on success</returns>
+        public static bool WriteFormattedTimestampLocalTimeZone(in long timestamp, ref UnsafeText messageOutput)
+        {
+            var length = TimeStampWrapper.GetFormattedTimeStampStringLocalTime(timestamp, ref messageOutput);
+            // Timestamp not retrieved
+            if (length <= 0)
+                return false;
+
+            return true;
+        }
+
+        /// <summary>
+        /// Writes Timestamp to the UnsafeText in Local time zone to show in the Console Window in the Editor (HH:MM:SS)
+        /// </summary>
+        /// <param name="timestamp">Timestamp to write</param>
+        /// <param name="messageOutput">Where to write to</param>
+        /// <returns>True on success</returns>
+        public static bool WriteFormattedTimestampLocalTimeZoneForConsole(in long timestamp, ref UnsafeText messageOutput)
+        {
+            var length = TimeStampWrapper.GetFormattedTimeStampStringLocalTimeForConsole(timestamp, ref messageOutput);
+            // Timestamp not retrieved
+            if (length <= 0)
+                return false;
 
             return true;
         }

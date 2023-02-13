@@ -1,7 +1,21 @@
 # Changelog
 
+## [1.0.0-pre.21] - 2023-02-13
+
+### Changed
+* Console sink reports timestamp in the local timezone, instead of UTC.
+* Logger settings set 'CaptureStacktrace' to true by default.
+
+### Fixed
+
+* Improve compilation when using UNITY_DOTS_DEBUG
+
+### Security
+
 ## [1.0.0-pre.11] - 2022-11-19
+
 * Release preparations, no functional changes.
+
 
 ## [1.0.0-exp.7] - 2022-10-19
 
@@ -27,7 +41,7 @@
 * Initialization order because of cctor is not called in some Burst cases
 
 
-## [1.0.0-exp.6] - 2022-09-21
+## [1.0.0] - 2022-09-21
 
 ### Added
 
@@ -65,9 +79,6 @@
 * Formatter's architecture that gives the ability to provide custom formatters for user types
 * FlushAll is called on Logger's Dispose
 
-### Deprecated
-
-
 ### Removed
 
 * Unity.Mathematics dependency from Logging logic removed
@@ -93,6 +104,7 @@
 * Reserved argument names parsed incorrectly
 * Crash in some cases when a user calls Log. from non-main thread first (so cctor is called on non-main thread)
 * HideInStacktrace now works for burst's directcalls
+
 
 ## [0.4.0] - 2021-09-17
 

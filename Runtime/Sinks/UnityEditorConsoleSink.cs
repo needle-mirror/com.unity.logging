@@ -130,7 +130,7 @@ namespace Unity.Logging.Sinks
 
                     var timestampStart = messageBuffer.Length;
                     messageBuffer.Append('[');
-                    LogWriterUtils.WriteFormattedTimestamp(logEvent.Timestamp, ref messageBuffer);
+                    LogWriterUtils.WriteFormattedTimestampLocalTimeZoneForConsole(logEvent.Timestamp, ref messageBuffer);
                     messageBuffer.Append(']');
                     var timestampLength = messageBuffer.Length - timestampStart;
 

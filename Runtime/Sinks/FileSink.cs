@@ -1,6 +1,6 @@
-// #if PLATFORM_SWITCH
-// #define FILESINK_IN_MEMORY
-// #endif
+#if PLATFORM_SWITCH
+#define FILESINK_IN_MEMORY
+#endif
 
 using Unity.Logging;
 using System;
@@ -301,7 +301,7 @@ namespace Unity.Logging.Sinks
     {
         public static void MakeSureDirectoryExistsForFile(string fileName)
         {
-#if !NET_DOTS
+#if !NET_DOTS && !PLATFORM_SWITCH
             try
             {
                 var dirPath = Path.GetDirectoryName(fileName);
