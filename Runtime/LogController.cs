@@ -218,6 +218,15 @@ namespace Unity.Logging
                  FlushSync();
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void DispatchMessage(PayloadHandle payload, long timestamp, long stacktraceId, LogLevel logLevel)
+        {
+            DispatchQueue.Enqueue(payload, timestamp, stacktraceId, logLevel);
+
+            if (SyncMode == SyncMode.FullSync || (SyncMode == SyncMode.FatalIsSync && logLevel == LogLevel.Fatal))
+                 FlushSync();
+        }
+
         /// <summary>
         /// Count of log messages dispatched and waiting to be processed
         /// </summary>

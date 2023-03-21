@@ -83,6 +83,13 @@ namespace Unity.Logging
 
             if (LoggerManager.Logger == null)
                 LoggerManager.Logger = this;
+
+#if UNITY_STARTUP_LOGS_API
+            if (config.GetRetrieveStartupLogs())
+            {
+                UnityStartupLogs.Log(this);
+            }
+#endif
         }
 
         /// <summary>

@@ -22,6 +22,11 @@
             "name": "Unity",
             "expression": "2022.3.0a1",
             "define": "UNITY_HAS_UTF8_VIEW"
+        },
+        {
+            "name": "Unity",
+            "expression": "2023.2.0a1",
+            "define": "UNITY_STARTUP_LOGS_API"
         }
     ],
     "noEngineReferences": false

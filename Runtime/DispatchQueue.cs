@@ -185,6 +185,25 @@ namespace Unity.Logging
         }
 
         /// <summary>
+        /// Adds new message to the write buffer under read lock. Timestamp is supplied.
+        /// Note that if timestamp is less than last timestamp logged, it will be ignored.
+        /// This method is intended for logging messages injected at startup.
+        /// </summary>
+        /// <param name="payload">PayloadHandle of the log message</param>
+        /// <param name="timestamp">Timestamp of log in nanoseconds</param>
+        /// <param name="stacktraceId">Stacktrace id of the log message or 0 if none</param>
+        /// <param name="logLevel">LogLevel of the log message</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void Enqueue(PayloadHandle payload, long timestamp, long stacktraceId, LogLevel logLevel)
+        {
+            using (var readLock = new SpinLockReadWrite.ScopedReadLock(m_SwapDoubleBufferLock))
+            {
+                var listToWrite = UseAforRead ? m_ListB.AsParallelWriter() : m_ListA.AsParallelWriter();
+                listToWrite.AddNoResize(new LogMessage(payload, timestamp, stacktraceId, logLevel));
+            }
+        }
+
+        /// <summary>
         /// Enters the exclusive lock for <see cref="DispatchQueue"/> to get the access for both buffers till <see cref="EndLockAfterSyncAccess"/> is called.
         /// </summary>
         /// <param name="olderMessages">Returns the buffer with older messages (read buffer)</param>

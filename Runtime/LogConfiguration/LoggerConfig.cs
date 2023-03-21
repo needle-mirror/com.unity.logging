@@ -40,6 +40,9 @@ namespace Unity.Logging
     {
         private FixedString512Bytes m_CurrentTemplate = "{Timestamp} | {Level} | {Message}";
         private bool m_CurrentCaptureStacktrace = true;
+#if UNITY_STARTUP_LOGS_API
+        private bool m_RetrieveStartupLogs = false;
+#endif
         /// <summary>
         /// Set minimal <see cref="LogLevel"/> that will be processed by the <see cref="Logger"/>
         /// </summary>
@@ -102,6 +105,23 @@ namespace Unity.Logging
         /// </summary>
         /// <returns>True is current state is to capture stacktraces</returns>
         public bool GetCaptureStacktrace() => m_CurrentCaptureStacktrace;
+
+#if UNITY_STARTUP_LOGS_API
+        /// <summary>
+        /// Should this logger log startup logs
+        /// <summary>
+        public LoggerConfig RetrieveStartupLogs(bool log = true)
+        {
+            m_RetrieveStartupLogs = log;
+            return this;
+        }
+
+        /// <summary>
+        /// Returns current log startup state.
+        /// </summary>
+        /// <returns>True is current state is to log startup logs</returns>
+        public bool GetRetrieveStartupLogs() => m_RetrieveStartupLogs;
+#endif
 
         /// <summary>
         /// Call that creates <see cref="Logger"/>

@@ -1,12 +1,12 @@
 {
   "name": "com.unity.logging",
   "displayName": "Unity Logging",
-  "version": "1.0.0-pre.21",
+  "version": "1.0.0-pre.37",
   "unity": "2022.2",
   "unityRelease": "2f1",
   "dependencies": {
-    "com.unity.burst": "1.8.2",
-    "com.unity.collections": "2.1.0-pre.11"
+    "com.unity.burst": "1.8.3",
+    "com.unity.collections": "2.1.0-pre.18"
   },
   "relatedPackages": {
     "com.unity.logging.tests": "1.0.0"
@@ -18,16 +18,16 @@
     "unity"
   ],
   "_upm": {
-    "changelog": "### Changed\n* Console sink reports timestamp in the local timezone, instead of UTC.\n* Logger settings set 'CaptureStacktrace' to true by default.\n\n### Fixed\n\n* Improve compilation when using UNITY_DOTS_DEBUG\n\n### Security"
+    "changelog": "### Changed\n\n* Updated Burst version in use to 1.8.3"
   },
   "upmCi": {
-    "footprint": "db098b82153b4c50274731e90c6964be5a1f6622"
+    "footprint": "9316f3bfca681ea31fd9ab7b6a601e1ac5aa6d55"
   },
   "documentationUrl": "https://docs.unity3d.com/Packages/com.unity.logging@1.0/manual/index.html",
   "repository": {
     "url": "https://github.cds.internal.unity3d.com/unity/dots.git",
     "type": "git",
-    "revision": "0e572178431e16c09c6c434c873bf0c60e52a5e9"
+    "revision": "15bf392224681c22f76277c3db22b5656ac4c1a5"
   },
   "samples": [
     {

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.0-pre.37] - 2023-03-21
+
+### Changed
+
+* Updated Burst version in use to 1.8.3
+
+
+
 ## [1.0.0-pre.21] - 2023-02-13
 
 ### Changed
@@ -40,7 +48,6 @@
 * Unity 2023 compatibility
 * Initialization order because of cctor is not called in some Burst cases
 
-
 ## [1.0.0] - 2022-09-21
 
 ### Added
@@ -79,6 +86,9 @@
 * Formatter's architecture that gives the ability to provide custom formatters for user types
 * FlushAll is called on Logger's Dispose
 
+### Deprecated
+
+
 ### Removed
 
 * Unity.Mathematics dependency from Logging logic removed
@@ -104,6 +114,10 @@
 * Reserved argument names parsed incorrectly
 * Crash in some cases when a user calls Log. from non-main thread first (so cctor is called on non-main thread)
 * HideInStacktrace now works for burst's directcalls
+
+### Security
+
+
 
 
 ## [0.4.0] - 2021-09-17
