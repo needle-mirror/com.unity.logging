@@ -323,19 +323,19 @@ namespace Unity.Logging
 
         private string GenerateUniqPostfix(string paramList, LogCallData currMethod, HashSet<string> uniqHashSet)
         {
-            string Gen()
+            string Gen(int n)
             {
-                return Common.CreateMD5String(paramList + uniqHashSet.Count + currMethod.GetHashCode()) + Common.CreateUniqueCompilableString();
+                return Common.CreateMD5String(paramList + uniqHashSet.Count + currMethod + n.ToString());
             }
 
-            var uniqPostfix = Gen();
+            var uniqPostfix = Gen(0);
 
-            for (var guard = 0; guard < 100; ++guard)
+            for (var guard = 1; guard < 100; ++guard)
             {
                 if (uniqHashSet.Add(uniqPostfix))
                     return uniqPostfix;
 
-                uniqPostfix = Gen();
+                uniqPostfix = Gen(guard);
             }
 
             throw new Exception("Something is wrong with GenerateUniqPostfix - unable to generate unique string in 100 tries");

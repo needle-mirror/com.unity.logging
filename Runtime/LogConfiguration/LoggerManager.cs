@@ -80,6 +80,9 @@ namespace Unity.Logging.Internal
             ManagedStackTraceWrapper.Initialize();
             TimeStampWrapper.Initialize();
             Builder.Initialize();
+#if !UNITY_DOTSRUNTIME
+            UnityLogRedirectorManager.Initialize();
+#endif
         }
 
         /// <summary>
@@ -182,6 +185,10 @@ namespace Unity.Logging.Internal
                 OtherLoggers.RemoveAtSwapBack(indx);
 
             LogControllerWrapper.Remove(logger.Handle);
+#if !UNITY_DOTSRUNTIME
+            if (logger.Config.GetRedirectUnityLogs())
+                UnityLogRedirectorManager.EndRedirection(logger);
+#endif
         }
 
         /// <summary>

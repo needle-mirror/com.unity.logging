@@ -215,10 +215,10 @@ class ClassA()
 
 
             Assert.IsTrue(ContainsAndPreviousLineHas(m, "Info(in FixedString64Bytes msg, in Int32 arg0, in FixedString32Bytes arg1)"));
-            Assert.IsTrue(ContainsAndPreviousLineHas(m, "__(in FixedString64Bytes msg, in Int32 arg0, in FixedString32Bytes arg1, ref LogController logController, ref LogControllerScopedLock @lock)", "[BurstCompile"));
+            Assert.IsTrue(ContainsAndPreviousLineHas(m, "_E_E(in FixedString64Bytes msg, in Int32 arg0, in FixedString32Bytes arg1, ref LogController logController, ref LogControllerScopedLock @lock)", "[BurstCompile"));
 
 
-            Assert.IsTrue(ContainsAndPreviousLineHas(m, "__(in PayloadHandle msg, in global::Unity.Logging.LogStringsFixedCombinationUniq__iZRgLDn_BnNMDKN9RgKjg__ arg0, in PayloadHandle arg1, in SByte arg2, ref LogController logController, ref LogControllerScopedLock @lock)", "[BurstCompile"));
+            Assert.IsTrue(ContainsAndPreviousLineHas(m, "_E_E(in PayloadHandle msg, in global::Unity.Logging.LogStringsFixedCombinationUniq__SiZRgLDn_PBnNMDKN9RgKjg_E_E arg0, in PayloadHandle arg1, in SByte arg2, ref LogController logController, ref LogControllerScopedLock @lock)", "[BurstCompile"));
             Assert.IsTrue(ContainsAndPreviousLineHas(m, "string arg1, in SByte arg2)"));
             Assert.IsTrue(m.Contains("payloadHandle_arg1")); // payloadHandle_arg1 fixedstring must be passed as-is
         }
@@ -260,7 +260,7 @@ class ClassA()
             // public static LogDecorateScope Decorate(string msg, in Int32 arg0)
             // public static LogDecorateScope Decorate(in this LogContextWithLock ctx, string msg, in Int32 arg0)
             // public static void Decorate(this LogContextWithDecoratorLogTo dec, string msg, in Int32 arg0)
-            Assert.IsTrue(ContainsAndPreviousLineHas(m, "__(in PayloadHandle msg, in Int32 arg0, ref LogContextWithDecorator handles)", "[BurstCompile"));
+            Assert.IsTrue(ContainsAndPreviousLineHas(m, "_E_E(in PayloadHandle msg, in Int32 arg0, ref LogContextWithDecorator handles)", "[BurstCompile"));
             Assert.IsTrue(ContainsAndPreviousLineHas(m, "public static LogDecorateScope Decorate(string msg, in Int32 arg0)"));
             Assert.IsTrue(ContainsAndPreviousLineHas(m, "public static LogDecorateScope Decorate(in this LogContextWithLock ctx, string msg, in Int32 arg0)"));
             Assert.IsTrue(ContainsAndPreviousLineHas(m, "public static void Decorate(in this LogContextWithDecoratorLogTo dec, string msg, in Int32 arg0)"));
@@ -312,7 +312,7 @@ class ClassA()
 
             Assert.IsNotEmpty(m);
 
-            Assert.IsTrue(ContainsAndPreviousLineHas(m, "__(in FixedString64Bytes msg, in PayloadHandle arg0, in Int32 arg1, ref LogController logController, ref LogControllerScopedLock @lock)", "[BurstCompile"));
+            Assert.IsTrue(ContainsAndPreviousLineHas(m, "_E_E(in FixedString64Bytes msg, in PayloadHandle arg0, in Int32 arg1, ref LogController logController, ref LogControllerScopedLock @lock)", "[BurstCompile"));
             Assert.IsTrue(ContainsAndPreviousLineHas(m, "public static void Info(in FixedString64Bytes msg, string arg0, in Int32 arg1)"));
             Assert.IsTrue(ContainsAndPreviousLineHas(m, "public static void Info(this LogContextWithLock dec, in FixedString64Bytes msg, string arg0, in Int32 arg1)"));
         }
@@ -511,7 +511,7 @@ class ClassA
             var indxStart = methods.IndexOf("public static LogDecorateScope Decorate(string msg, string arg0)", StringComparison.Ordinal);
             Assert.IsTrue(indxStart >= 0, "Cannot find Decorate method");
 
-            var indxCallBurstedDecor = methods.IndexOf("__(payloadHandle_msg, payloadHandle_arg0, ref dec);", indxStart, StringComparison.Ordinal);
+            var indxCallBurstedDecor = methods.IndexOf("_E_E(payloadHandle_msg, payloadHandle_arg0, ref dec);", indxStart, StringComparison.Ordinal);
             Assert.IsTrue(indxCallBurstedDecor >= 0, "Cannot find Decorate method part");
 
             var n = indxCallBurstedDecor - indxStart;
@@ -1054,7 +1054,7 @@ class ClassLiteral
             Assert.IsNull(generator.structureData.StructTypes);
             var s = generator.methodsGenCode;
 
-            Assert.IsTrue(s.Contains("__(in PayloadHandle msg, in Int32 arg0, in PayloadHandle arg1"));
+            Assert.IsTrue(s.Contains("_E_E(in PayloadHandle msg, in Int32 arg0, in PayloadHandle arg1"));
 
             Assert.IsTrue(s.Contains("handles.Add(msg);"));
             Assert.IsTrue(s.Contains("BuildContextSpecialType(arg0"));
@@ -1673,9 +1673,9 @@ class ClassA
             Assert.IsNotEmpty(m);
 
             // Bursted (in NativeText -- cannot be in the burst entry function - it has dispose sentinel
-            Assert.IsTrue(m.Contains("__(in NativeTextBurstWrapper msg,"));
-            Assert.IsFalse(m.Contains("__(in NativeText msg,"));
-            Assert.IsFalse(m.Contains("__(NativeText msg,"));
+            Assert.IsTrue(m.Contains("_E_E(in NativeTextBurstWrapper msg,"));
+            Assert.IsFalse(m.Contains("_E_E(in NativeText msg,"));
+            Assert.IsFalse(m.Contains("_E_E(NativeText msg,"));
 
             Assert.IsFalse(m.Contains("CopyStringToPayloadBuffer")); // no CopyStringToPayloadBuffer
         }
@@ -2496,7 +2496,7 @@ class ClassA
             Assert.IsFalse(methods.Contains("DateTimeWrapper_"));
             Assert.IsFalse(methods.Contains("DateTime_"));
 
-            Assert.IsTrue(methods.Contains("__(in PayloadHandle msg, in global::CustomNameSpace.DateTimeWrapper arg0, "));
+            Assert.IsTrue(methods.Contains("_E_E(in PayloadHandle msg, in global::CustomNameSpace.DateTimeWrapper arg0, "));
 
 
             Assert.IsNotNull(generator.userTypesGenCode);

@@ -86,9 +86,11 @@ namespace Unity.Logging
 
 #if UNITY_STARTUP_LOGS_API
             if (config.GetRetrieveStartupLogs())
-            {
-                UnityStartupLogs.Log(this);
-            }
+                UnityLogs.RetrieveStartupLogs(this);
+#endif
+#if !UNITY_DOTSRUNTIME
+            if (config.GetRedirectUnityLogs())
+                UnityLogs.RedirectUnityLogs(this);
 #endif
         }
 

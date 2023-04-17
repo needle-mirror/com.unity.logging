@@ -58,17 +58,55 @@ namespace SourceGenerator.Logging
             {
                 var inputBytes = System.Text.Encoding.ASCII.GetBytes(input);
                 var hashBytes = md5.ComputeHash(inputBytes);
+     
+                var base64Chars = new char[24];
+                System.Convert.ToBase64CharArray(hashBytes, 0, hashBytes.Length, base64Chars, 0);
 
-                var outputChars = new char[24];
-                System.Convert.ToBase64CharArray(hashBytes, 0, hashBytes.Length, outputChars, 0);
-
-                for (var i = 0; i < outputChars.Length; i++)
+                var stuffedChars = new char[48];
+                int n = 0;
+                foreach (var c in base64Chars)
                 {
-                    var c = outputChars[i];
-                    outputChars[i] = (c == '+' || c == '/' || c == '=') ? '_' : c;
+                    if (c == '_' ||c == '+' || c == '/' || c == '=') {
+                        stuffedChars[n++] = '_';
+                        switch (c) {
+                            case '_': 
+                                stuffedChars[n++] = '_';
+                                break;
+                            case '+':
+                                stuffedChars[n++] = 'P';
+                                break;
+                            case '/':
+                                stuffedChars[n++] = 'S';
+                                break;
+                            case '=':
+                                stuffedChars[n++] = 'E';
+                                break;
+                        }
+                    } else {
+                        stuffedChars[n++] = c;
+                    }
                 }
 
-                return new string(outputChars);
+                return new string(stuffedChars, 0, n);
+            }
+        }
+
+        public static ulong CreateStableHashCodeFromString(string str)
+        {
+            unchecked
+            {
+                var hash1 = 5381UL;
+                var hash2 = hash1;
+
+                for(var i = 0; i < str.Length && str[i] != '\0'; i += 2)
+                {
+                    hash1 = ((hash1 << 5) + hash1) ^ str[i];
+                    if (i == str.Length - 1 || str[i+1] == '\0')
+                        break;
+                    hash2 = ((hash2 << 5) + hash2) ^ str[i+1];
+                }
+
+                return hash1 + (hash2*1566083941UL);
             }
         }
 

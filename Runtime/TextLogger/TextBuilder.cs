@@ -8,6 +8,7 @@ using Unity.Collections.LowLevel.Unsafe;
 using Unity.IL2CPP.CompilerServices;
 using Unity.Logging.Internal;
 using UnityEngine;
+using UnityEngine.Scripting;
 
 namespace Unity.Logging
 {
@@ -39,6 +40,7 @@ namespace Unity.Logging
         /// /// <param name="utf8Length">UTF8 string's length in bytes</param>
         /// <param name="allocator">Allocator that should be used to allocate <see cref="UnsafeText"/></param>
         /// <returns><see cref="UnsafeText"/> that has UTF8 representation of source string</returns>
+        [RequiredMember]
         public static unsafe UnsafeText CreateText__Unmanaged(byte* utf8Ptr, int utf8Length, Allocator allocator)
         {
             var res = new UnsafeText(utf8Length, allocator) { Length = utf8Length };
@@ -236,6 +238,7 @@ namespace Unity.Logging
         /// <param name="prependLength">If true - length in bytes will be added to payload</param>
         /// <param name="deferredRelease">If true - <see cref="PayloadHandle"/> will be registered for deferred release (after 2 updates)</param>
         /// <returns><see cref="PayloadHandle"/> that holds the data</returns>
+        [RequiredMember]
         public static unsafe PayloadHandle CopyStringToPayloadBuffer__Unmanaged(byte* sourcePtr, int sourceLength, ref LogMemoryManager memAllocator, bool prependTypeId = false, bool prependLength = false, bool deferredRelease = false)
         {
             var allocSize = sourceLength;
@@ -318,6 +321,7 @@ namespace Unity.Logging
         /// /// <param name="sourceLength">Input message's length in bytes</param>
         /// <param name="memAllocator">Memory manager</param>
         /// <returns>Handle for the created data</returns>
+        [RequiredMember]
         public static unsafe PayloadHandle BuildMessage__Unmanaged(byte* sourcePtr, int sourceLength, ref LogMemoryManager memAllocator)
         {
             return BuildMessage(sourcePtr, sourceLength, ref memAllocator);

@@ -33,6 +33,15 @@ OutputTemplate("{Timestamp} - {Level} - {Message}")
 
 Use [`CaptureStackTrace`](xref:Unity.Logging.LoggerConfig.CaptureStacktrace(System.Boolean)) to define if the current logger should capture the stack trace. This is available within Burst compiled code. If you use a version of Burst prior to 1.80, there might be some missing stack frames.
 
+### RedirectUnityLogs
+
+Use [`RedirectUnityLogs`](xref:Unity.Logging.LoggerConfig.RedirectUnityLogs) to route Debug logs into the package.  This is intended as an aid for porting code to the logging package.  Debug logs will be sent to all sinks which set this option.  All Debug logs will be redirected into the package, overriding any currently configured filtering or enabling of Debug logs.
+
+
+### RetrieveStartupLogs
+
+Use [`RetrieveStartupLogs`[(xref:Unity.Logging.LoggerConfig.RetrieveStartupLogs) to retrieve any logs captured before package startup.  Logs are only captured when the Player Setting Capture Startup Logs has been set.
+
 ## Further information
 
 * [Sinks](sinks.md)

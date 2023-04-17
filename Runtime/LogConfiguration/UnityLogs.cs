@@ -1,4 +1,3 @@
-#if UNITY_STARTUP_LOGS_API
 using System;
 using Unity.Logging;
 using Unity.Logging.Internal;
@@ -8,33 +7,24 @@ using UnityEngine;
 
 namespace Unity.Logging
 {
-    internal class UnityStartupLogs
+    internal class UnityLogs
     {
-        private static LogLevel LogLevelFromLogType(LogType logType)
-        {
-            if (logType == LogType.Error)
-                return LogLevel.Error;
-            if (logType == LogType.Assert)
-                return LogLevel.Fatal;
-            if (logType == LogType.Warning)
-                return LogLevel.Warning;
-            if (logType == LogType.Log)
-                return LogLevel.Info;
-            if (logType == LogType.Exception)
-                return LogLevel.Fatal;
-            if ((int)logType == 5) // Managed and Native differ here
-                return LogLevel.Debug;
-
-            return LogLevel.Fatal;
-        }
-
-        internal static void Log(Logger logger)
+#if UNITY_STARTUP_LOGS_API
+        internal static void RetrieveStartupLogs(Logger logger)
         {
             foreach (var log in Debug.RetrieveStartupLogs())
             {
-                LogStartupLog(logger.Handle, TimeStampWrapper.DateTimeTicksToNanosec(log.timestamp), LogLevelFromLogType(log.logType), log.message);
+                LogUnityLog(logger.Handle, TimeStampWrapper.DateTimeTicksToNanosec(log.timestamp), log.logType, log.message);
             }
         }
+#endif
+
+#if !UNITY_DOTSRUNTIME
+        internal static void RedirectUnityLogs(Logger logger)
+        {
+            UnityLogRedirectorManager.BeginRedirection(logger);
+        }
+#endif
 
         private static void WriteBurstedCapturedLog(in long timestamp, in LogLevel logLevel, in PayloadHandle msg, ref LogController logController, ref LogControllerScopedLock @lock)
         {
@@ -60,8 +50,27 @@ namespace Unity.Logging
             }
         }
 
-        private static void LogStartupLog(LoggerHandle handle, long timestamp, LogLevel logLevel, string msg)
+        private static LogLevel LogLevelFromLogType(LogType logType)
         {
+            if (logType == LogType.Error)
+                return LogLevel.Error;
+            if (logType == LogType.Assert)
+                return LogLevel.Fatal;
+            if (logType == LogType.Warning)
+                return LogLevel.Warning;
+            if (logType == LogType.Log)
+                return LogLevel.Info;
+            if (logType == LogType.Exception)
+                return LogLevel.Fatal;
+            if ((int)logType == 5) // Managed and Native differ here
+                return LogLevel.Debug;
+
+            return LogLevel.Fatal;
+        }
+
+        public static void LogUnityLog(LoggerHandle handle, long timestamp, LogType logType, string msg)
+        {
+            var logLevel = LogLevelFromLogType(logType);
             var scopedLock = LogControllerScopedLock.Create(handle);
             try 
             {
@@ -77,4 +86,3 @@ namespace Unity.Logging
         }
     }
 }
-#endif

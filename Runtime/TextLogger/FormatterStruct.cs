@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Logging.Internal;
+using UnityEngine.Scripting;
 
 namespace Unity.Logging
 {
@@ -30,6 +31,7 @@ namespace Unity.Logging
         /// <param name="utf8Bytes">UTF8 string pointer</param>
         /// <param name="utf8Len">UTF8 string length</param>
         /// <returns>FormatError from Append operation</returns>
+        [RequiredMember]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe FormatError AppendString__Unmanaged(ref UnsafeText output, byte* utf8Bytes, int utf8Len)
         {
@@ -54,6 +56,7 @@ namespace Unity.Logging
         /// <param name="utf8Bytes">UTF8 string pointer</param>
         /// <param name="utf8Len">UTF8 string length</param>
         /// <returns>True if string is null or empty</returns>
+        [RequiredMember]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static unsafe bool IsEmpty__Unmanaged(byte* utf8Bytes, int utf8Len)
         {

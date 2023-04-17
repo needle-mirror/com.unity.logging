@@ -9,7 +9,7 @@ namespace Unity.Logging
     /// <summary>
     /// Helper functions for Burst
     /// </summary>
-    [BurstCompile(CompileSynchronously = true)]
+    [BurstCompile]
     public static class BurstHelper
     {
         /// <summary>
@@ -75,7 +75,7 @@ namespace Unity.Logging
             return IsBurstEnabled;
         }
 
-        [BurstCompile(CompileSynchronously = true)]
+        [BurstCompile]
         static void CheckThatBurstIsEnabledBurstDirectCall()
         {
             if (IsManaged)

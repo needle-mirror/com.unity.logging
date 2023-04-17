@@ -1,11 +1,28 @@
 # Changelog
 
+## [1.0.8] - 2023-04-17
+
+### Added
+
+* Support for redirecting Unity Debug logs into logging package
+
+### Changed
+
+* Updated Burst version to 1.8.4
+
+### Fixed
+
+* Generated names are now deterministic
+* Update XML documenation.
+* When targeting the IL2CPP backend with Burst enabled and Managed Code Stripping set to values higher than 'Minimal', logging messages should no longer cause a compilation failure. Some code paths internal to the package and necessary for Burst compatibility were erroneously being stripped with Managed Code Stripping enabled.
+
+
+
 ## [1.0.0-pre.37] - 2023-03-21
 
 ### Changed
 
 * Updated Burst version in use to 1.8.3
-
 
 
 ## [1.0.0-pre.21] - 2023-02-13
@@ -19,6 +36,7 @@
 * Improve compilation when using UNITY_DOTS_DEBUG
 
 ### Security
+
 
 ## [1.0.0-pre.11] - 2022-11-19
 

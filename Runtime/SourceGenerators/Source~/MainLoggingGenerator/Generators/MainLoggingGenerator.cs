@@ -34,7 +34,7 @@ public class LoggingSourceGenerator : IIncrementalGenerator
 
     static ulong GetAssemblyHash(Compilation compilation)
     {
-        if (compilation.AssemblyName != null) return (ulong)compilation.AssemblyName.GetHashCode();
+        if (compilation.AssemblyName != null) return Common.CreateStableHashCodeFromString(compilation.AssemblyName);
 
         return 0;
     }

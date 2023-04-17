@@ -15,7 +15,7 @@ namespace SourceGenerator.Logging
             using var _ = new Profiler.Auto("LogParserEmitter.Emit");
 
             var sb = new StringBuilder();
-            var uniquePostfix = Common.CreateUniqueCompilableString();
+            var uniquePostfix = Common.CreateMD5String($"LogParserEmitter{assemblyHash}");
 
             sb.Append($@"{EmitStrings.SourceFileHeader}
 {EmitStrings.SourceFileHeaderIncludes}

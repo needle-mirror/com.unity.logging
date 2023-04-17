@@ -23,3 +23,8 @@ Logging has the following limitations:
 * It’s not natively supported by the Test Framework, a workaround is to use the `WriteTo.UnityDebugLog` sink at the cost of a negative performance impact.
 * The sink for the Editor Console is only available in versions of Unity after 2022.2.0a15. For older versions of the editor a workaround is to use the `WriteTo.UnityDebugLog` sink at the cost of a negative performance impact.
 * You can’t log into the Editor Console while running a player.
+
+
+## Additional resources
+
+* [Prerelease (1.0.0-pre.65) documentation](pre-release.md)
