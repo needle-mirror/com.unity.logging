@@ -301,7 +301,7 @@ namespace Unity.Logging.Internal
                         }
                     }
 
-                    s_LogControllers.Data.Clear();
+                    s_LogControllers.Data.Dispose();
                 }
             }
             finally

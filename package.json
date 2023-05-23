@@ -1,7 +1,7 @@
 {
   "name": "com.unity.logging",
   "displayName": "Unity Logging",
-  "version": "1.0.8",
+  "version": "1.0.10",
   "unity": "2022.2",
   "unityRelease": "15f1",
   "dependencies": {
@@ -18,16 +18,16 @@
     "unity"
   ],
   "_upm": {
-    "changelog": "### Added\n\n* Support for redirecting Unity Debug logs into logging package\n\n### Changed\n\n* Updated Burst version to 1.8.4\n\n### Fixed\n\n* Generated names are now deterministic\n* Update XML documenation.\n* When targeting the IL2CPP backend with Burst enabled and Managed Code Stripping set to values higher than 'Minimal', logging messages should no longer cause a compilation failure. Some code paths internal to the package and necessary for Burst compatibility were erroneously being stripped with Managed Code Stripping enabled."
+    "changelog": "### Fixed\n\n* Fixed memory leaks on domain reloads."
   },
   "upmCi": {
-    "footprint": "f0b71ff88c06eacc2cb8335fd168432d876f4e5d"
+    "footprint": "86c950911e0a8c7d827b3f108652e47fc9e8736f"
   },
   "documentationUrl": "https://docs.unity3d.com/Packages/com.unity.logging@1.0/manual/index.html",
   "repository": {
     "url": "https://github.cds.internal.unity3d.com/unity/dots.git",
     "type": "git",
-    "revision": "25dfb648cd0fabcf13fed46219e5fbe0fdabe4ac"
+    "revision": "464acdc5351df3c5deeb425d7aa31f4c7b20c0cf"
   },
   "samples": [
     {

@@ -137,8 +137,8 @@ namespace Unity.Logging
 #if ENABLE_UNITY_COLLECTIONS_CHECKS || UNITY_DOTS_DEBUG
             if (ptr == null)
                 throw new ArgumentNullException(nameof(ptr), "BinaryParser.Ptr is null. Memory corruption detected");
-            if (oldLengthBytes <= 0)
-                throw new ArgumentOutOfRangeException(nameof(oldLengthBytes), $"oldLengthBytes is 0 or negative -> {oldLengthBytes}");
+            if (oldLengthBytes < 0)
+                throw new ArgumentOutOfRangeException(nameof(oldLengthBytes), $"oldLengthBytes is negative -> {oldLengthBytes}");
             if (readBytes != 0 && oldLengthBytes - readBytes < 0)
                 throw new ArgumentOutOfRangeException(nameof(readBytes), $"Reading out of range of BinaryParser: {oldLengthBytes}, read {readBytes} -> {oldLengthBytes - readBytes}");
 #endif

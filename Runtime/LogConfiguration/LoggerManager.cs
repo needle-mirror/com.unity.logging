@@ -142,6 +142,9 @@ namespace Unity.Logging.Internal
         /// <returns>The handle identifying the scheduled job. Can be used as a dependency for a later job or ensure completion on the main thread.</returns>
         public static JobHandle ScheduleUpdateLoggers(JobHandle dependency = default)
         {
+            if (s_CurrentLogger == null && OtherLoggers.Count == 0)
+                return dependency;
+
             var allPreviousUpdatesComplete = JobHandle.CombineDependencies(s_LastLogUpdate.Data, dependency);
 
             var allLoggerComplete = allPreviousUpdatesComplete;
@@ -279,6 +282,9 @@ namespace Unity.Logging.Internal
             errorMessage.Dispose();
 
             Assert.AreEqual(0, errorLoggers, str);
+
+            // Usage checks will have re-created the memory manager, so shut it down again.
+            ShutdownAllGlobalDecorators();
 #endif
         }
 

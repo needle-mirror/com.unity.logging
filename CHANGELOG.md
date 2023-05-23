@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.10] - 2023-05-23
+
+### Fixed
+
+* Fixed memory leaks on domain reloads.
+
+
 ## [1.0.8] - 2023-04-17
 
 ### Added
