@@ -20,7 +20,7 @@
         },
         {
             "name": "Unity",
-            "expression": "2022.3.0a1",
+            "expression": "2023.1.0a1",
             "define": "UNITY_HAS_UTF8_VIEW"
         },
         {

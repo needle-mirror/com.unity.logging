@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.11] - 2023-05-30
+
+### Fixed
+
+* Fixed compilation errors with 2022.3.
+
+
 ## [1.0.10] - 2023-05-23
 
 ### Fixed
