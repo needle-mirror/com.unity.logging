@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.14] - 2023-07-27
+
+### Changed
+
+* Updated Burst dependency to version 1.8.7
+
+
 ## [1.0.11] - 2023-05-30
 
 ### Fixed
