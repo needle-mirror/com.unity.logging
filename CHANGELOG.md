@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.16] - 2023-09-11
+
+
+### Changed
+
+* Updated Burst dependency to version 1.8.8
+
+
+### Fixed
+
+* Fixed an issue where using a string that requires more than 2 bytes per character when encoded in UTF-8 in a formatted log would result in either an exception being thrown or the editor hanging, depending on the sync mode.
+
+
 ## [1.0.14] - 2023-07-27
 
 ### Changed
@@ -19,6 +32,7 @@
 ### Fixed
 
 * Fixed memory leaks on domain reloads.
+
 
 
 ## [1.0.8] - 2023-04-17

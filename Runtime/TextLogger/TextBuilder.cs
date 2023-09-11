@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using System.Runtime.InteropServices;
 using Unity.Burst;
 using UnityEngine.Assertions;
@@ -58,7 +59,7 @@ namespace Unity.Logging
         {
             fixed(char* sourcePtr = source)
             {
-                var lengthBytes = source.Length * 2;
+                var lengthBytes = Encoding.UTF8.GetByteCount(source);
 
                 var res = new UnsafeText(lengthBytes, allocator) { Length = lengthBytes };
 
@@ -167,7 +168,7 @@ namespace Unity.Logging
         /// <returns><see cref="PayloadHandle"/> that holds the data</returns>
         public static PayloadHandle CopyStringToPayloadBuffer(string source, ref LogMemoryManager memAllocator, bool prependTypeId = false, bool prependLength = false, bool deferredRelease = false)
         {
-            var allocSize = source.Length * 2;
+            var allocSize = Encoding.UTF8.GetByteCount(source);
             if (prependTypeId)
                 allocSize += UnsafeUtility.SizeOf<ulong>();
             if (prependLength)
@@ -204,7 +205,7 @@ namespace Unity.Logging
 
                     fixed(char* sourcePtr = source)
                     {
-                        var error = UTF8ArrayUnsafeUtility.Copy(dataPtr, out var actualBytes, allocSize, sourcePtr, source.Length);
+                        var error = UTF8ArrayUnsafeUtility.Copy(dataPtr, out var actualBytes, dataLen, sourcePtr, source.Length);
                         if (error != CopyError.None)
                         {
                             memAllocator.ReleasePayloadBuffer(handle, out var _, true);
