@@ -43,9 +43,7 @@ namespace Unity.Logging
 #if UNITY_STARTUP_LOGS_API
         private bool m_RetrieveStartupLogs = false;
 #endif
-#if !UNITY_DOTSRUNTIME
         private bool m_RedirectUnityLogs = false;
-#endif        
         /// <summary>
         /// Set minimal <see cref="LogLevel"/> that will be processed by the <see cref="Logger"/>
         /// </summary>
@@ -126,7 +124,6 @@ namespace Unity.Logging
         public bool GetRetrieveStartupLogs() => m_RetrieveStartupLogs;
 #endif
 
-#if !UNITY_DOTSRUNTIME
         /// <summary>
         /// Should this logger redirect Unity logs
         /// </summary>
@@ -143,7 +140,6 @@ namespace Unity.Logging
         /// </summary>
         /// <returns>True is current state is to log startup logs</returns>
         public bool GetRedirectUnityLogs() => m_RedirectUnityLogs;
-#endif
      
         /// <summary>
         /// Call that creates <see cref="Logger"/>

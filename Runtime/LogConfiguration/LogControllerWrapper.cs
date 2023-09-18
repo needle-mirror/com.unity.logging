@@ -179,9 +179,7 @@ namespace Unity.Logging.Internal
         private static readonly SharedStatic<IntPtr> s_MainThreadId = SharedStatic<IntPtr>.GetOrCreate<ThreadGuardKey, IntPtr>(16);
         private static readonly SharedStatic<byte> s_Initialized = SharedStatic<byte>.GetOrCreate<ThreadGuardKey, byte>(16);
 
-#if !UNITY_DOTSRUNTIME
         [UnityEngine.RuntimeInitializeOnLoadMethod(UnityEngine.RuntimeInitializeLoadType.SubsystemRegistration)]
-#endif
         public static void InitializeFromMainThread()
         {
             if (s_Initialized.Data != 0) return;
@@ -295,9 +293,10 @@ namespace Unity.Logging.Internal
 
                     for (var i = 0; i < n; i++)
                     {
-                        if (s_LogControllers.Data[i].IsCreated)
+                        ref var logController = ref s_LogControllers.Data.ElementAt(i);
+                        if (logController.IsCreated)
                         {
-                            s_LogControllers.Data[i].Shutdown();
+                            logController.Shutdown();
                         }
                     }
 
@@ -378,7 +377,8 @@ namespace Unity.Logging.Internal
                 var n = s_LogControllers.Data.Length;
                 for (var i = 0; i < n; i++)
                 {
-                    res += s_LogControllers.Data[i].LogDispatched();
+                    ref var logController = ref s_LogControllers.Data.ElementAt(i);
+                    res += logController.LogDispatched();
                 }
                 return res;
             }
@@ -393,7 +393,8 @@ namespace Unity.Logging.Internal
             var n = s_LogControllers.Data.Length;
             for (var i = 0; i < n; i++)
             {
-                if (s_LogControllers.Data[i].Handle.Value == loggerHandle.Value)
+                ref var logController = ref s_LogControllers.Data.ElementAt(i);
+                if (logController.Handle.Value == loggerHandle.Value)
                 {
                     return i;
                 }
@@ -455,8 +456,9 @@ namespace Unity.Logging.Internal
                     var n = s_LogControllers.Data.Length;
                     for (var i = 0; i < n; i++)
                     {
-                        var thisRes = s_LogControllers.Data[i].LogDispatched();
-                        var handle = s_LogControllers.Data[i].Handle;
+                        ref var logController = ref s_LogControllers.Data.ElementAt(i);
+                        var thisRes = logController.LogDispatched();
+                        var handle = logController.Handle;
 
                         var highlightedLogger = handle.Value == loggerHandle.Value;
                         if (highlightedLogger)

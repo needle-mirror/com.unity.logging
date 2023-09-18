@@ -1,4 +1,4 @@
-#if UNITY_DOTSRUNTIME || UNITY_2021_2_OR_NEWER
+#if UNITY_2021_2_OR_NEWER
 #define LOGGING_USE_UNMANAGED_DELEGATES // C# 9 support, unmanaged delegates - gc alloc free way to call
 #endif
 

@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.1.0-exp.1] - 2023-09-18
+
+### Added
+
+* When using `RedirectUnityLogs`, native logs (logs emitted from C++ code in Unity) will now also be redirected. Note that this is only available in player builds as a current limitation prevents this redirection from working in the editor. Redirection of logs emitted by C# code remains supported both in player builds and in the editor, however.
+
+### Fixed
+
+* Under stress, it was possible to drop a log message.
+* Allow empty strings in logging messages
+* Performance issue with `LogControllerWrapper.GetLogControllerIndexUnderLockNoThrow` when creating many worlds.
+* Log sinks forwarded to UnityDebugLogSink will now no longer extract erroneous stacktraces from UnityDebugLogSink.cs. While it does not correctly forward stacktraces (if enabled), it at least doesn't report incorrect ones.
+* Fixed an issue where OutputTemplate is ignored when logging into UnityEditorConsole.
+
+
 ## [1.0.16] - 2023-09-11
 
 
@@ -11,6 +26,7 @@
 ### Fixed
 
 * Fixed an issue where using a string that requires more than 2 bytes per character when encoded in UTF-8 in a formatted log would result in either an exception being thrown or the editor hanging, depending on the sync mode.
+
 
 
 ## [1.0.14] - 2023-07-27
@@ -71,7 +87,6 @@
 * Improve compilation when using UNITY_DOTS_DEBUG
 
 ### Security
-
 
 ## [1.0.0-pre.11] - 2022-11-19
 

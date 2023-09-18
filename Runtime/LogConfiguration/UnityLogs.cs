@@ -19,12 +19,10 @@ namespace Unity.Logging
         }
 #endif
 
-#if !UNITY_DOTSRUNTIME
         internal static void RedirectUnityLogs(Logger logger)
         {
             UnityLogRedirectorManager.BeginRedirection(logger);
         }
-#endif
 
         private static void WriteBurstedCapturedLog(in long timestamp, in LogLevel logLevel, in PayloadHandle msg, ref LogController logController, ref LogControllerScopedLock @lock)
         {

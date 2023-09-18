@@ -156,11 +156,7 @@ namespace Unity.Logging.Internal.Debug
                 Assert.CheckMessage(message);
 
                 if (CurrentMode.Data == Mode.EnabledInUnityEngineDebugLogError)
-#if UNITY_DOTSRUNTIME
-                    UnityEngine.Debug.LogError(message);
-#else
                     UnityLogRedirectorManager.UnityLogError(ref message);
-#endif
             }
         }
 

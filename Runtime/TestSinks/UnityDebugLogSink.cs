@@ -1,4 +1,4 @@
-#if UNITY_DOTSRUNTIME || UNITY_2021_2_OR_NEWER
+#if UNITY_2021_2_OR_NEWER
 #define LOGGING_USE_UNMANAGED_DELEGATES // C# 9 support, unmanaged delegates - gc alloc free way to call
 #endif
 
@@ -139,23 +139,31 @@ namespace Unity.Logging.Sinks
         {
             var str = System.Text.Encoding.UTF8.GetString(data, length);
 
+            // If we're redirecting logs, install the default log handler before writing the logs
+            // to avoid creating an infinite loop where our logs here would also be redirected.
+            var originalLogHandler = UnityEngine.Debug.unityLogger.logHandler;
+            if (originalLogHandler is UnityLogRedirector)
+                UnityEngine.Debug.unityLogger.logHandler = UnityLogRedirectorManager.s_logHandlerUnity;
+
             switch (level)
             {
                 case LogLevel.Verbose:
                 case LogLevel.Debug:
                 case LogLevel.Info:
-                    UnityEngine.Debug.Log(str);
+                    UnityEngine.Debug.LogFormat(UnityEngine.LogType.Log, UnityEngine.LogOption.NoStacktrace, null, str);
                     break;
                 case LogLevel.Warning:
-                    UnityEngine.Debug.LogWarning(str);
+                    UnityEngine.Debug.LogFormat(UnityEngine.LogType.Warning, UnityEngine.LogOption.NoStacktrace, null, str);
                     break;
                 case LogLevel.Error:
                 case LogLevel.Fatal:
-                    UnityEngine.Debug.LogError(str);
+                    UnityEngine.Debug.LogFormat(UnityEngine.LogType.Error, UnityEngine.LogOption.NoStacktrace, null, str);
                     break;
                 default:
-                    throw new Exception("Unknown LogLevel");
+                    throw new ArgumentOutOfRangeException($"Unknown LogLevel {level} for log '{str}'!", level, nameof(UnityDebugLogSink));
             }
+
+            UnityEngine.Debug.unityLogger.logHandler = originalLogHandler;
         }
 
         // called from burst or not burst

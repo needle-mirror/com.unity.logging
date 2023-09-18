@@ -322,7 +322,7 @@ namespace Unity.Logging
         /// /// <param name="sourceLength">Input message's length in bytes</param>
         /// <param name="memAllocator">Memory manager</param>
         /// <returns>Handle for the created data</returns>
-        [RequiredMember]
+	    [RequiredMember]
         public static unsafe PayloadHandle BuildMessage__Unmanaged(byte* sourcePtr, int sourceLength, ref LogMemoryManager memAllocator)
         {
             return BuildMessage(sourcePtr, sourceLength, ref memAllocator);

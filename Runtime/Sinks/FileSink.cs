@@ -301,7 +301,7 @@ namespace Unity.Logging.Sinks
     {
         public static void MakeSureDirectoryExistsForFile(string fileName)
         {
-#if !NET_DOTS && !PLATFORM_SWITCH
+#if !PLATFORM_SWITCH
             try
             {
                 var dirPath = Path.GetDirectoryName(fileName);

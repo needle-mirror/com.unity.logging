@@ -1,4 +1,4 @@
-#if UNITY_DOTSRUNTIME || UNITY_2021_2_OR_NEWER
+#if UNITY_2021_2_OR_NEWER
 #define LOGGING_USE_UNMANAGED_DELEGATES // C# 9 support, unmanaged delegates - gc alloc free way to call
 #endif
 
@@ -138,9 +138,7 @@ namespace Unity.Logging
             DecoratePayloadHandles = new ThreadSafeList4096<PayloadHandle>();
 
             MemoryManager.Initialize(memoryParameters);
-#if !UNITY_DOTSRUNTIME && !NET_DOTS
             ManagedOperations.Initialize();
-#endif
         }
 
         /// <summary>
@@ -406,8 +404,6 @@ namespace Unity.Logging
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public bool IsInterestedIn(ref LogMessage elem)
             {
-                if (LastTimestamp >= elem.Timestamp)
-                    return false;
                 // Timestamp is tracked to make sure we never process the same logging message in this sink twice
                 // This actually can happen in case of Fatal is sync, everything else is async
                 Interlocked.Exchange(ref LastTimestamp, elem.Timestamp);

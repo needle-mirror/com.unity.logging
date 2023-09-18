@@ -1,4 +1,4 @@
-#if UNITY_DOTSRUNTIME || UNITY_2021_2_OR_NEWER
+#if UNITY_2021_2_OR_NEWER
 #define LOGGING_USE_UNMANAGED_DELEGATES // C# 9 support, unmanaged delegates - gc alloc free way to call
 #endif
 
@@ -214,7 +214,6 @@ namespace Unity.Logging.Sinks
                 {
                     string res = "";
 
-#if !UNITY_DOTSRUNTIME
                     var utf16Size = ExactLengthOfUtf16(ref m_Text);
                     res = string.Create(utf16Size, m_Text, (chars, text) =>
                     {
@@ -225,43 +224,7 @@ namespace Unity.Logging.Sinks
                             }
                         }
                     });
-#else
-                    // remove this block when dots runtime moves to .net 6 / 2.1 standard
-                    try
-                    {
 
-                        unsafe
-                        {
-                            static string ConvertToUtf16String<T>(char* dst, ref T fs, int utf16Capacity) where T : IUTF8Bytes, INativeList<byte>
-                            {
-                                Unicode.Utf8ToUtf16(fs.GetUnsafePtr(), fs.Length, dst, out var length, utf16Capacity);
-
-                                return new string(dst, 0, length);
-                            }
-
-                            var utf16WorstSize = m_Text.Length * 2;
-                            var shouldStackalloc = utf16WorstSize <= 4096;
-
-                            if (shouldStackalloc)
-                            {
-                                var c = stackalloc char[utf16WorstSize];
-                                res = ConvertToUtf16String(c, ref m_Text, utf16WorstSize);
-                            }
-                            else
-                            {
-                                var arr = new char[utf16WorstSize];
-                                fixed (char* c = arr)
-                                {
-                                    res = ConvertToUtf16String(c, ref m_Text, utf16WorstSize);
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        UnityEngine.Debug.LogException(e);
-                    }
-#endif
                     m_Text.Clear();
                     return res;
                 }

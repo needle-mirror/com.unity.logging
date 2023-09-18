@@ -14,14 +14,6 @@ namespace Unity.Logging
     {
         private static JobHandle s_UpdateHandle;
 
-#if UNITY_DOTSRUNTIME
-        public static void Initialize()
-        {
-            RunOnStart();
-            CreateDefaultLogger();
-        }
-#endif
-
         /// <summary>
         /// Creates a default logger and sets it as the current one, if the current logger is null.
         /// Automatically called with <see cref="RuntimeInitializeLoadType.BeforeSceneLoad"/>
@@ -60,13 +52,6 @@ namespace Unity.Logging
 
         private static string GetLogFilePath()
         {
-#if UNITY_DOTSRUNTIME
-            // If a log file was passed on the command line, use that.
-            var args = Environment.GetCommandLineArgs();
-            var optIndex = System.Array.IndexOf(args, "-logFile");
-            if (optIndex >=0 && ++optIndex < (args.Length - 1) && !args[optIndex].StartsWith("-"))
-                return args[optIndex];
-#endif
             return Path.Combine(GetLogDirectory(), "Output.log");
         }
 
@@ -77,24 +62,7 @@ namespace Unity.Logging
 
         private static string GetLogDirectory()
         {
-#if UNITY_DOTSRUNTIME
-            var assemblyDir = System.Reflection.Assembly.GetExecutingAssembly().CodeBase;
-            var firstArg = Environment.GetCommandLineArgs()[0];
-            var currentDir = Directory.GetCurrentDirectory();
-
-            var dir = "";
-            if (string.IsNullOrEmpty(assemblyDir))
-                dir = assemblyDir;
-            else if (string.IsNullOrEmpty(firstArg))
-                dir = firstArg;
-            else if (string.IsNullOrEmpty(currentDir))
-                dir = currentDir;
-
-            var logDir = Path.Combine(dir, "Logs");
-            Directory.CreateDirectory(logDir);
-            return logDir;
-
-#elif UNITY_EDITOR
+#if UNITY_EDITOR
             var dataDir = Path.GetDirectoryName(Application.dataPath);
             var logDir = Path.Combine(dataDir, "Logs");
             Directory.CreateDirectory(logDir);
@@ -120,13 +88,11 @@ namespace Unity.Logging
 
             LoggerManager.Initialize(); // TODO Is this needed?
 
-#if !UNITY_DOTSRUNTIME
             // Make sure we don't subscribe many times.
             Application.quitting -= CleanupFunction;
             Application.quitting += CleanupFunction;
 
             IntegrateIntoPlayerLoop();
-#endif
         }
 
 #if UNITY_EDITOR
@@ -152,7 +118,6 @@ namespace Unity.Logging
         }
 #endif
 
-#if !UNITY_DOTSRUNTIME
         private static void IntegrateIntoPlayerLoop()
         {
             var loggingManagerType = typeof(LoggerManager);
@@ -175,7 +140,6 @@ namespace Unity.Logging
             playerLoop.subSystemList = newSubsystemList;
             UnityEngine.LowLevel.PlayerLoop.SetPlayerLoop(playerLoop);
         }
-#endif
 
         // Don't make this method private! DOTS Runtime needs to be able to call it from outside.
         /// <summary>

@@ -88,10 +88,8 @@ namespace Unity.Logging
             if (config.GetRetrieveStartupLogs())
                 UnityLogs.RetrieveStartupLogs(this);
 #endif
-#if !UNITY_DOTSRUNTIME
             if (config.GetRedirectUnityLogs())
                 UnityLogs.RedirectUnityLogs(this);
-#endif
         }
 
         /// <summary>

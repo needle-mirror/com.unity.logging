@@ -99,12 +99,6 @@ namespace Unity.Logging
         }}
 #endif
 
-#if UNITY_DOTSRUNTIME
-        static Log() {{
-            Init();
-        }}
-#endif
-
         private static byte s_Initialized = 0;
         static void Init() {{
             if (s_Initialized != 0) return;

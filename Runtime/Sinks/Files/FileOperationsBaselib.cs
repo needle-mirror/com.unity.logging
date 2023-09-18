@@ -22,11 +22,7 @@ namespace Unity.Logging.Sinks
                 errorMsg.Append((int)error.code);
                 errorMsg.Append((FixedString32Bytes)" - ");
                 errorMsg.Append(error.nativeErrorCode);
-#if UNITY_DOTSRUNTIME
-                    Unity.Logging.DotsRuntimePrintWrapper.ConsoleWrite(errorMsg.GetUnsafePtr(), errorMsg.Length, (byte)1);
-#else
                 UnityEngine.Debug.LogError(errorMsg);
-#endif
                 result = IntPtr.Zero;
             }
             else

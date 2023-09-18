@@ -1,6 +1,6 @@
 //#define LOGGING_FILE_OPS_DEBUG
 
-#if UNITY_DOTSRUNTIME || UNITY_2021_2_OR_NEWER
+#if UNITY_2021_2_OR_NEWER
 #define LOGGING_USE_UNMANAGED_DELEGATES // C# 9 support, unmanaged delegates - gc alloc free way to call
 #endif
 
@@ -120,7 +120,7 @@ namespace Unity.Logging.Sinks
                 UnityEngine.Debug.Log($"Write id = {id} {fileStream}. Length = {length}");
 #endif
 
-#if UNITY_DOTSRUNTIME || !UNITY_2021_2_OR_NEWER // ReadOnlySpan is .net standard 2.1, added in 2021.2
+#if !UNITY_2021_2_OR_NEWER // ReadOnlySpan is .net standard 2.1, added in 2021.2
                 var buffer = new byte[length];
                 fixed (byte* ptr = &buffer[0])
                 {

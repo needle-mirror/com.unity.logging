@@ -1,4 +1,4 @@
-#if UNITY_DOTSRUNTIME || UNITY_2021_2_OR_NEWER
+#if UNITY_2021_2_OR_NEWER
 #define LOGGING_USE_UNMANAGED_DELEGATES // C# 9 support, unmanaged delegates - gc alloc free way to call
 #endif
 
@@ -12,8 +12,6 @@ using Unity.Jobs;
 
 namespace Unity.Logging
 {
-#if !UNITY_DOTSRUNTIME && !NET_DOTS
-
     /// <summary>
     /// Collection of functionality that (currently) requires calling into managed code, which is exposed through Burst FunctionPointers
     /// allowing Burst compiled functions to call into managed code.
@@ -69,9 +67,6 @@ namespace Unity.Logging
             }
         }
     }
-#endif
-
-#if UNITY_DOTSRUNTIME
 
     [StructLayout(LayoutKind.Sequential)]
     public struct DotsRuntimePrintWrapper
@@ -97,8 +92,6 @@ namespace Unity.Logging
         }
     }
 
-#endif
-
     /// <summary>
     /// Static class for Console related operations.
     /// Provides <see cref="Write(byte*,int,byte)"/>, <see cref="Write(ref FixedString512Bytes)"/> and <see cref="Write(ref FixedString4096Bytes)"/> for low-level writing to the Console.
@@ -111,9 +104,6 @@ namespace Unity.Logging
         /// </summary>
         public static void BeginBatch()
         {
-#if UNITY_DOTSRUNTIME
-            Unity.Logging.DotsRuntimePrintWrapper.BeginBatchConsoleWrite();
-#endif
         }
 
         /// <summary>
@@ -121,9 +111,6 @@ namespace Unity.Logging
         /// </summary>
         public static void EndBatch()
         {
-#if UNITY_DOTSRUNTIME
-            Unity.Logging.DotsRuntimePrintWrapper.EndBatchConsoleWrite();
-#endif
         }
 
         /// <summary>
@@ -131,9 +118,6 @@ namespace Unity.Logging
         /// </summary>
         public static void Flush()
         {
-#if UNITY_DOTSRUNTIME
-            Unity.Logging.DotsRuntimePrintWrapper.Flush();
-#endif
         }
 
         /// <summary>
@@ -144,18 +128,14 @@ namespace Unity.Logging
         /// <param name="newLine">if true - add a new line at the end</param>
         public static unsafe void Write(byte* data, int length, byte newLine)
         {
-#if UNITY_DOTSRUNTIME
-            Unity.Logging.DotsRuntimePrintWrapper.ConsoleWrite(data, length, newLine);
-#else
             var ptr = Unity.Logging.ManagedOperations.SystemWriteLine;
-    #if LOGGING_USE_UNMANAGED_DELEGATES
+#if LOGGING_USE_UNMANAGED_DELEGATES
             unsafe
             {
                 ((delegate * unmanaged[Cdecl] <byte*, int, byte, void>)ptr.Value)(data, length, newLine);
             }
-    #else
+#else
             ptr.Invoke(data, length, newLine);
-    #endif
 #endif
         }
 
@@ -170,18 +150,14 @@ namespace Unity.Logging
                 var data = message.GetUnsafePtr();
                 var length = message.Length;
                 byte newLine = 1;
-#if UNITY_DOTSRUNTIME
-                Unity.Logging.DotsRuntimePrintWrapper.ConsoleWrite(data, length, newLine);
-#else
                 var ptr = Unity.Logging.ManagedOperations.SystemWriteLine;
-    #if LOGGING_USE_UNMANAGED_DELEGATES
+#if LOGGING_USE_UNMANAGED_DELEGATES
                 unsafe
                 {
                     ((delegate * unmanaged[Cdecl] <byte*, int, byte, void>)ptr.Value)(data, length, newLine);
                 }
-    #else
+#else
                 ptr.Invoke(data, length, newLine);
-    #endif
 #endif
             }
         }
@@ -197,18 +173,14 @@ namespace Unity.Logging
                 var data = message.GetUnsafePtr();
                 var length = message.Length;
                 byte newLine = 1;
-#if UNITY_DOTSRUNTIME
-                Unity.Logging.DotsRuntimePrintWrapper.ConsoleWrite(data, length, newLine);
-#else
                 var ptr = Unity.Logging.ManagedOperations.SystemWriteLine;
-    #if LOGGING_USE_UNMANAGED_DELEGATES
+#if LOGGING_USE_UNMANAGED_DELEGATES
                 unsafe
                 {
                     ((delegate * unmanaged[Cdecl] <byte*, int, byte, void>)ptr.Value)(data, length, newLine);
                 }
-    #else
+#else
                 ptr.Invoke(data, length, newLine);
-    #endif
 #endif
             }
         }

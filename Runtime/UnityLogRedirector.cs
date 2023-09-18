@@ -1,4 +1,3 @@
-#if !UNITY_DOTSRUNTIME
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
@@ -19,7 +18,7 @@ namespace Unity.Logging
         private static byte s_Initialized;
         private static ILogger s_loggerUnity;
         internal static List<Logger> s_loggersRedirectingUnityLogs;
-        private static ILogHandler s_logHandlerUnity;
+        internal static ILogHandler s_logHandlerUnity;
         private static ILogHandler s_logHandlerRedirect;
         private static LogType s_filterLogTypeOriginal;
         private static bool s_logEnabledOriginal;
@@ -67,6 +66,21 @@ namespace Unity.Logging
             UnityEngine.Debug.unityLogger.logHandler = s_logHandlerRedirect;
             UnityEngine.Debug.unityLogger.filterLogType = LogType.Log;
             UnityEngine.Debug.unityLogger.logEnabled = true;
+
+            // By taking over the log handler from UnityEngine.Debug, we redirect all messages
+            // to us except native logs. This means that anything going through the global log
+            // callback at this point are native logs, which we can redirect by themselves.
+            //
+            // This is not done in the editor because we have no way of preventing these logs to
+            // make it to the console window. If the user has set up the editor console sink,
+            // they'll get these messages duplicated. This could be alleviated in the future (e.g.
+            // only make it so that the console sink doesn't work for native logs), but it's
+            // simpler to just say that native logs are not redirected in the editor.
+#if !UNITY_EDITOR
+            // We remove the callback first to avoid adding it twice.
+            Application.logMessageReceivedThreaded -= OnNativeLogMessageReceived;
+            Application.logMessageReceivedThreaded += OnNativeLogMessageReceived;
+#endif
         }
 
         private static void EndRedirection()
@@ -74,6 +88,10 @@ namespace Unity.Logging
             UnityEngine.Debug.unityLogger.logHandler = s_logHandlerUnity;
             UnityEngine.Debug.unityLogger.filterLogType = s_filterLogTypeOriginal;
             UnityEngine.Debug.unityLogger.logEnabled = s_logEnabledOriginal;
+
+#if !UNITY_EDITOR
+            Application.logMessageReceivedThreaded -= OnNativeLogMessageReceived;
+#endif
         }
 
         [AOT.MonoPInvokeCallback(typeof(LogErrorDelegate))]
@@ -90,13 +108,19 @@ namespace Unity.Logging
             var ptr = Burst2ManagedCall<LogErrorDelegate, LogErrorDelegateKey>.Ptr();
             ptr.Invoke(data, length);
         }
+
+        private static void OnNativeLogMessageReceived(string msg, string stackTrace, LogType logType)
+        {
+            foreach (var logger in s_loggersRedirectingUnityLogs)
+                UnityLogRedirector.LogRedirectedLog(logger.Handle, logType, msg);
+        }
     }
 
     /// <summary>
     /// Implements ILogHandler for redirection of Unity logs.
     /// </summary>
     [HideInStackTrace]
-    public class UnityLogRedirector: UnityEngine.ILogHandler
+    public class UnityLogRedirector : UnityEngine.ILogHandler
     {
         private static void WriteBurstedRedirectedLog(in LogLevel logLevel, in PayloadHandle msg, ref LogController logController, ref LogControllerScopedLock @lock)
         {
@@ -142,11 +166,11 @@ namespace Unity.Logging
             return LogLevel.Fatal;
         }
 
-        private static void LogRedirectedLog(LoggerHandle handle, LogType logType, string msg)
+        internal static void LogRedirectedLog(LoggerHandle handle, LogType logType, string msg)
         {
             var logLevel = LogLevelFromLogType(logType);
             var scopedLock = LogControllerScopedLock.Create(handle);
-            try 
+            try
             {
                 ref var logController = ref scopedLock.GetLogController();
                 if (logController.HasSinksFor(logLevel) == false) return;
@@ -184,4 +208,3 @@ namespace Unity.Logging
         }
     }
 }
-#endif

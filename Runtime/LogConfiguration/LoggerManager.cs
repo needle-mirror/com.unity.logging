@@ -1,4 +1,4 @@
-#if UNITY_DOTSRUNTIME || UNITY_2021_2_OR_NEWER
+#if UNITY_2021_2_OR_NEWER
 #define LOGGING_USE_UNMANAGED_DELEGATES // C# 9 support, unmanaged delegates - gc alloc free way to call
 #endif
 
@@ -80,9 +80,7 @@ namespace Unity.Logging.Internal
             ManagedStackTraceWrapper.Initialize();
             TimeStampWrapper.Initialize();
             Builder.Initialize();
-#if !UNITY_DOTSRUNTIME
             UnityLogRedirectorManager.Initialize();
-#endif
         }
 
         /// <summary>
@@ -188,10 +186,8 @@ namespace Unity.Logging.Internal
                 OtherLoggers.RemoveAtSwapBack(indx);
 
             LogControllerWrapper.Remove(logger.Handle);
-#if !UNITY_DOTSRUNTIME
             if (logger.Config.GetRedirectUnityLogs())
                 UnityLogRedirectorManager.EndRedirection(logger);
-#endif
         }
 
         /// <summary>

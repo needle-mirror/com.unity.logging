@@ -1,4 +1,4 @@
-#if UNITY_DOTSRUNTIME || UNITY_2021_2_OR_NEWER
+#if UNITY_2021_2_OR_NEWER
 #define LOGGING_USE_UNMANAGED_DELEGATES // C# 9 support, unmanaged delegates - gc alloc free way to call
 #endif
 
@@ -36,9 +36,9 @@ namespace Unity.Logging.Sinks
         /// <param name="outputTemplate">Output message template for this particular sink. Null if common template should be used</param>
         /// <returns>Logger config</returns>
         public static LoggerConfig UnityEditorConsole(this LoggerWriterConfig writeTo,
-                                                    bool? captureStackTrace = null,
-                                                    LogLevel? minLevel = null,
-                                                    FixedString512Bytes? outputTemplate = null)
+            bool? captureStackTrace = null,
+            LogLevel? minLevel = null,
+            FixedString512Bytes? outputTemplate = null)
         {
             var config = new UnityEditorConsoleSink.Configuration(writeTo, captureStackTrace, minLevel, outputTemplate);
 
@@ -72,8 +72,8 @@ namespace Unity.Logging.Sinks
             /// <param name="minLevelOverride">Minimal level of logs for this particular sink. Null if common level should be used</param>
             /// <param name="outputTemplateOverride">Output message template for this particular sink. Null if common template should be used</param>
             public Configuration(LoggerWriterConfig writeTo,
-                                 bool? captureStackTraceOverride = null, LogLevel? minLevelOverride = null, FixedString512Bytes? outputTemplateOverride = null)
-                : base(writeTo, formatter: default, captureStackTraceOverride, minLevelOverride, outputTemplateOverride)
+                bool? captureStackTraceOverride = null, LogLevel? minLevelOverride = null, FixedString512Bytes? outputTemplateOverride = null)
+                : base(writeTo, formatter: LogFormatterText.Formatter, captureStackTraceOverride, minLevelOverride, outputTemplateOverride)
             {}
         }
 
@@ -85,12 +85,6 @@ namespace Unity.Logging.Sinks
         {
 #if USE_CONSOLE_SINK
             var s = base.ToSinkStruct();
-            s.Formatter = LogFormatterText.Formatter;
-            unsafe
-            {
-                s.UserData = new IntPtr(&s.Formatter);
-            }
-
             s.OnLogMessageEmit = new OnLogMessageEmitDelegate(OnLogMessageEmitFunc);
             return s;
 #else
@@ -107,48 +101,8 @@ namespace Unity.Logging.Sinks
             {
                 try
                 {
-                    messageBuffer.Length = 0;
-
-                    ref var memAllocator = ref LogMemoryManager.FromPointer(memoryManager);
-                    var headerData = HeaderData.Parse(in logEvent, ref memAllocator);
-
-                    if (headerData.Error != ErrorCodes.NoError)
-                        return;
-
-                    FixedString512Bytes errorMessage = default;
-
-
-                    var messageStart = messageBuffer.Length;
-
-                    ref var formatter = ref UnsafeUtility.AsRef<FormatterStruct>(userData.ToPointer());
-                    var success = LogFormatterText.WriteMessage(in logEvent, ref formatter, ref headerData, ref messageBuffer, ref errorMessage, ref memAllocator);
-
-                    var messageLength = messageBuffer.Length - messageStart;
-
-                    if (success == false)
-                        return;
-
-                    var timestampStart = messageBuffer.Length;
-                    messageBuffer.Append('[');
-                    LogWriterUtils.WriteFormattedTimestampLocalTimeZoneForConsole(logEvent.Timestamp, ref messageBuffer);
-                    messageBuffer.Append(']');
-                    var timestampLength = messageBuffer.Length - timestampStart;
-
-                    var stacktraceStart = messageBuffer.Length;
-                    ManagedStackTraceWrapper.AppendToUnsafeText(logEvent.StackTraceId, ref messageBuffer);
-                    var stacktraceLength = messageBuffer.Length - stacktraceStart;
-
-                    var mode = GetLogMessageFlags(in logEvent);
-
-                    var logEntry = new UnityEditor.LogEntryStruct
-                    {
-                        mode = mode,
-                        timestamp = new UTF8View(&messageBuffer.GetUnsafePtr()[timestampStart], timestampLength),
-                        callstack = new UTF8View(&messageBuffer.GetUnsafePtr()[stacktraceStart], stacktraceLength),
-                        message = new UTF8View(&messageBuffer.GetUnsafePtr()[messageStart], messageLength),
-                    };
-
-                    UnityEditor.ConsoleWindow.AddMessage(ref logEntry);
+                    var data = messageBuffer.GetUnsafePtr();
+                    ManagedUnityEngineDebugLogWrapper.Write(logEvent.Level, data, messageBuffer.Length);
                 }
                 finally
                 {
@@ -157,17 +111,10 @@ namespace Unity.Logging.Sinks
             }
         }
 
-        private static UnityEditor.LogMessageFlags GetLogMessageFlags(in LogMessage logEvent)
+        public override void Initialize(Logger logger, SinkConfiguration systemConfig)
         {
-            switch (logEvent.Level)
-            {
-                case LogLevel.Warning:
-                    return UnityEditor.LogMessageFlags.DebugWarning;
-                case LogLevel.Error:
-                case LogLevel.Fatal:
-                    return UnityEditor.LogMessageFlags.DebugError;
-            }
-            return UnityEditor.LogMessageFlags.DebugLog;
+            ManagedUnityEngineDebugLogWrapper.Initialize();
+            base.Initialize(logger, systemConfig);
         }
 #endif
     }
