@@ -138,6 +138,7 @@ namespace Unity.Logging
             var success = true;
             var hashName = new IntHashSet(128, allocator);
             var firstProperty = true;
+            var argDefault = default(ArgumentInfo);
 
             if (headerData.ContextBufferCount > 0)
             {
@@ -181,7 +182,7 @@ namespace Unity.Logging
                                         if (headerData.TryGetContextPayload(contextIndex, out var contextPayload))
                                         {
                                             success = formatter.BeginProperty(ref messageOutput, ref jsonName) && success;
-                                            success = LogWriterUtils.WriteFormattedContextData(ref formatter, in contextPayload, ref messageOutput, ref errorMessage, ref memAllocator, ref arg) && success;
+                                            success = LogWriterUtils.WriteFormattedContextData(ref formatter, in contextPayload, ref messageOutput, ref errorMessage, ref memAllocator, ref argDefault) && success;
                                             success = formatter.EndProperty(ref messageOutput, ref jsonName) && success;
                                         }
                                         else
@@ -213,7 +214,6 @@ namespace Unity.Logging
             var tempNameBuffer = new FixedString512Bytes();
 
             var decorN = headerData.DecorationPairs;
-            var argDefault = default(ArgumentInfo);
             for (var i = 0; i < decorN; ++i)
             {
                 if (headerData.TryGetDecorationPayload(i, ref memAllocator, out var namePayload, out var dataPayload) == false)

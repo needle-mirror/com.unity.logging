@@ -315,7 +315,8 @@ namespace Unity.Logging.Internal
         {
             ThreadGuard.EnsureRunningOnMainThread();
 
-            CheckLogControllersCreated();
+            if (s_LogControllers.Data.IsCreated == false)
+                return;
             CheckLoggerHandleIsValid(loggerHandle);
 
             try

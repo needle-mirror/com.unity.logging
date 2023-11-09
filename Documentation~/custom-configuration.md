@@ -37,7 +37,9 @@ Use [`CaptureStackTrace`](xref:Unity.Logging.LoggerConfig.CaptureStacktrace(Syst
 
 Use [`RedirectUnityLogs`](xref:Unity.Logging.LoggerConfig.RedirectUnityLogs) to route `Debug` logs into the package.  This is intended as an aid for porting code to the logging package. `Debug` logs will be sent to all sinks which set this option. All `Debug` logs will be redirected into the package, overriding any currently configured filtering or enabling of `Debug` logs.
 
-**Note**: Redirection of native logs (logs emitted by the C++ parts of Unity) is only supported in player builds. A current limitation makes this redirection unavailable in the editor. Redirection of logs emitted by C# code is supported both in player builds and in the editor.
+**Note**: 
+- Redirection of native logs (logs emitted by the C++ parts of Unity) is only supported in player builds. A current limitation makes this redirection unavailable in the editor. Redirection of logs emitted by C# code is supported both in player builds and in the editor. 
+- You will loose context highlighting in the editor when using this feature.
 
 ### RetrieveStartupLogs
 

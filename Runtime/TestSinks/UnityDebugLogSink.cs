@@ -150,14 +150,14 @@ namespace Unity.Logging.Sinks
                 case LogLevel.Verbose:
                 case LogLevel.Debug:
                 case LogLevel.Info:
-                    UnityEngine.Debug.LogFormat(UnityEngine.LogType.Log, UnityEngine.LogOption.NoStacktrace, null, str);
+                    UnityEngine.Debug.LogFormat(UnityEngine.LogType.Log, UnityEngine.LogOption.NoStacktrace, null, "{0}", str);
                     break;
                 case LogLevel.Warning:
-                    UnityEngine.Debug.LogFormat(UnityEngine.LogType.Warning, UnityEngine.LogOption.NoStacktrace, null, str);
+                    UnityEngine.Debug.LogFormat(UnityEngine.LogType.Warning, UnityEngine.LogOption.NoStacktrace, null, "{0}", str);
                     break;
                 case LogLevel.Error:
                 case LogLevel.Fatal:
-                    UnityEngine.Debug.LogFormat(UnityEngine.LogType.Error, UnityEngine.LogOption.NoStacktrace, null, str);
+                    UnityEngine.Debug.LogFormat(UnityEngine.LogType.Error, UnityEngine.LogOption.NoStacktrace, null, "{0}", str);
                     break;
                 default:
                     throw new ArgumentOutOfRangeException($"Unknown LogLevel {level} for log '{str}'!", level, nameof(UnityDebugLogSink));

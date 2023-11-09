@@ -1,8 +1,24 @@
 # Changelog
 
+## [1.2.0-exp.3] - 2023-11-09
+
+
+### Changed
+
+* The minimum supported editor version is now 2022.3.11f1
+
+
+### Fixed
+
+* Fixed an issue where using format specifiers would lead to invalid JSON (e.g. using a format specifier that adds leading zeros to a number). Properties are simply not formatted anymore in the JSON objects.
+* Fixed an issue where logging a string that contains braces to the Unity console would result in FormatException being thrown.
+* You can now call Dispose on a deleted Logger object without it throwing an exception.
+
+
 ## [1.1.0-pre.3] - 2023-10-17
 
 ### Changed
+
 * Updated version for release preparation
 
 
