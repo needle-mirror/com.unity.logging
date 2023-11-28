@@ -1,12 +1,12 @@
 {
   "name": "com.unity.logging",
   "displayName": "Unity Logging",
-  "version": "1.2.0-exp.3",
+  "version": "1.2.0-pre.4",
   "unity": "2022.3",
   "unityRelease": "11f1",
   "dependencies": {
-    "com.unity.burst": "1.8.8",
-    "com.unity.collections": "2.4.0-exp.2"
+    "com.unity.burst": "1.8.10",
+    "com.unity.collections": "2.4.0-pre.2"
   },
   "relatedPackages": {
     "com.unity.logging.tests": "1.0.0"
@@ -18,16 +18,16 @@
     "unity"
   ],
   "_upm": {
-    "changelog": "### Changed\n\n* The minimum supported editor version is now 2022.3.11f1\n\n\n### Fixed\n\n* Fixed an issue where using format specifiers would lead to invalid JSON (e.g. using a format specifier that adds leading zeros to a number). Properties are simply not formatted anymore in the JSON objects.\n* Fixed an issue where logging a string that contains braces to the Unity console would result in FormatException being thrown.\n* You can now call Dispose on a deleted Logger object without it throwing an exception."
+    "changelog": "### Changed\n\n* Updated Burst dependency to 1.8.10"
   },
   "upmCi": {
-    "footprint": "ca1d4eeb671036205b51c144f9b539da4d8f45d5"
+    "footprint": "24a509078b80196173d8614d27b56b3798c453b8"
   },
   "documentationUrl": "https://docs.unity3d.com/Packages/com.unity.logging@1.2/manual/index.html",
   "repository": {
     "url": "https://github.cds.internal.unity3d.com/unity/dots.git",
     "type": "git",
-    "revision": "9bfd95fb576e8fa710c8544b6706bdd73e25afef"
+    "revision": "38c44b22a14cc4a35bc1b7a2f5ab1846208176d5"
   },
   "samples": [
     {
