@@ -1,7 +1,7 @@
 {
   "name": "com.unity.logging",
   "displayName": "Unity Logging",
-  "version": "1.2.0-pre.4",
+  "version": "1.2.0-pre.6",
   "unity": "2022.3",
   "unityRelease": "11f1",
   "dependencies": {
@@ -18,16 +18,16 @@
     "unity"
   ],
   "_upm": {
-    "changelog": "### Changed\n\n* Updated Burst dependency to 1.8.10"
+    "changelog": "### Changed\n\n* Promotion preparation"
   },
   "upmCi": {
-    "footprint": "24a509078b80196173d8614d27b56b3798c453b8"
+    "footprint": "bd8d86efdffd157097767ba7c65346a2a8a798d6"
   },
   "documentationUrl": "https://docs.unity3d.com/Packages/com.unity.logging@1.2/manual/index.html",
   "repository": {
     "url": "https://github.cds.internal.unity3d.com/unity/dots.git",
     "type": "git",
-    "revision": "38c44b22a14cc4a35bc1b7a2f5ab1846208176d5"
+    "revision": "c2136868e2bfbe78d7c68475d8ced6c623b4cb6d"
   },
   "samples": [
     {
