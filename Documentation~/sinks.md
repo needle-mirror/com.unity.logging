@@ -26,18 +26,20 @@ Some attributes are specific to the file sinks:
 * `maxRoll`: The amount of file fragments the logger creates before rolling back on the initial one.
 * `timeSpan`: The maximum time duration before writing the next file fragment.
 
-## Sink writing in the console
+## Sinks writing in the console
 
-Writing in the console provides an immediate error visualization, which is the best way to monitor what's going on while debugging. You can use the [Editor sink](xref:Unity.Logging.Sinks.UnityEditorConsoleSink) and the [stdOut sink](xref:Unity.Logging.Sinks.StdOutSinkSystem) for this:
+Writing in the console provides an immediate error visualization, which is the best way to monitor what's going on while debugging. You can use the [Editor sink](xref:Unity.Logging.Sinks.UnityEditorConsoleSink) and the [standard output sink](xref:Unity.Logging.Sinks.StdOutSinkSystem) for this.
 
-* **The Editor sink**:  Use `WriteTo.UnityEditorConsole` for the Unity Editor Console. This works with version  2022.2.0a15 and higher. It’s similar to `Debug.Log()` and supports GameObject logging, while adding more information.
-* **The StdOut sink:** Use `WriteTo.StdOut` to get a similar standard output like Unix and macOS.
+**Note**: On standalone desktop platforms (Windows, Mac, and Linux), Unity redirects standard output to the `Player.log` file. Thus on these platforms, using `WriteTo.StdOut()` will cause the logs to be written to that file instead. This is _not_ the case when running headless however. Running a server build, or running a build with the `-batchmode` command line argument will cause logs to be written to the normal standard output stream. Alternatively, it is also possible to disable the file redirection by passing the `-logfile` file command line argument without specifying a file name.
 
-## Other sinks
-The following are debug sinks that are useful for testing:
+Note that the editor console sink will write its own stack trace and timestamp directly, so there is no need to include the "{Stacktrace}" or "{Timestamp}" part in your output template. Doing so will result in the stack trace and/or timestamp being printed twice in the console output. Here's an example configuration that avoids the duplication:
 
-* [UnityDebugLog sink](xref:Unity.Logging.Sinks.UnityDebugLogSink): Reroutes messages into `UnityEngine.Debug.Log`. This is a debug sink, and is slower than using `Debug.Log`, but it can be useful for example for tests that use `LogExpect`.
-* [StringLogger sink](xref:Unity.Logging.Sinks.StringLoggerSinkExt.StringLogger*): Reroutes messages into in-memory string. Useful for testing expected log messages.
+```csharp
+new LoggerConfig()
+    .CaptureStacktrace()
+    .OutputTemplate("[{Timestamp}] {Message}{NewLine}{Stacktrace}")
+    .WriteTo.UnityEditorConsole(outputTemplate: "{Message}")
+```
 
 ## Common sink attributes
 

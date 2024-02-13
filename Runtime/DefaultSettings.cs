@@ -37,7 +37,7 @@ namespace Unity.Logging
 #endif
 #if UNITY_CONSOLE_API
                     .WriteTo.StdOut()
-                    .WriteTo.UnityEditorConsole()
+                    .WriteTo.UnityEditorConsole(outputTemplate: "{Message}")
 #else
                     .WriteTo.UnityDebugLog()
 #endif

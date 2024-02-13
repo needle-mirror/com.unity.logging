@@ -368,6 +368,13 @@ namespace Unity.Logging.Sinks
                     unsafeText.Dispose();
                     sb.Data.Remove(id);
                 }
+
+                if (sb.Data.Count() == 0)
+                {
+                    sb.Data.Dispose();
+                    sb.Data = default;
+                    IsInitialized = false;
+                }
             }
             finally
             {

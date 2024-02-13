@@ -129,14 +129,17 @@ namespace Unity.Logging
                 JsonWriter.AppendEscapedJsonString(ref messageOutput, tempBuffer.GetUnsafePtr(), tempBuffer.Length);
             }
 
+            tempBuffer.Dispose();
+
             messageOutput.Append((FixedString32Bytes)"\",\"Properties\":{");
 
             var currMsgSegment = new ParseSegment();
 
+            var hashName = new IntHashSet(128, allocator);
+
             var argIndexInString = -1;
             var done = false;
             var success = true;
-            var hashName = new IntHashSet(128, allocator);
             var firstProperty = true;
             var argDefault = default(ArgumentInfo);
 

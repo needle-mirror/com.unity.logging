@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.2.0-pre.12] - 2024-02-13
+
+### Changed
+
+* Updated Burst dependency to version 1.8.12
+
+### Fixed
+
+* Fixed an issue where `WriteTo.UnityEditorConsole` would fail to preserve the location of the log line. For example when double-clicking the log entry in the editor console, it would not take you to the appropriate line in your IDE.
+* Fixed a memory leak in the JSON sink.
+
 
 ## [1.2.0-pre.6] - 2023-12-13
 

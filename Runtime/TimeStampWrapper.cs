@@ -171,7 +171,7 @@ namespace Unity.Logging.Internal
             var dateTime = new DateTime(NanosecToDateTimeTicks(timestampUTCNanoseconds), DateTimeKind.Utc);
 
             var n = result.Length;
-            result.Append(dateTime.ToLocalTime().ToString("HH:mm:ss.fff"));
+            result.Append(dateTime.ToLocalTime().ToString("HH:mm:ss"));
             return result.Length - n;
         }
 

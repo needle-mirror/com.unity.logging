@@ -1,6 +1,8 @@
 # Logging package
 
-The Logging package is a versatile and highly configurable structured asynchronous logging solution. In addition to what you would expect from a traditional logging package (level, timestamp, stacktrace), it contains various ways to stream and record the logs  such as StdOut, text or JSON files, DebugLog, and your own custom implementation. You can also individually or collectively configure these logs.
+The Logging package is a versatile and highly configurable structured asynchronous logging solution. It is meant to be used in high-performance servers and other niche applications where performant logging is required. It is _not_ a complete replacement for the traditional `Debug.Log` APIs. If your application does not have specialized logging needs, it is still recommended to use the `Debug.Log` approach as it is more mature and supports more common use cases (e.g. in-editor iteration).
+
+In addition to what you would expect from a traditional logging package (level, timestamp, stacktrace), it contains various ways to stream and record the logs  such as standard out, text or JSON files, `Debug.Log`, and your own custom implementation. You can also individually or collectively configure these logs.
 
 It depends only on Collections package and Burst package; can be used without ECS.
 
@@ -21,5 +23,4 @@ For more information, see the documentation on [Installing hidden packages](http
 
 Logging has the following limitations:
 * It’s not natively supported by the Test Framework, a workaround is to use the `WriteTo.UnityDebugLog` sink at the cost of a negative performance impact.
-* The sink for the Editor Console is only available in versions of Unity after 2022.2.0a15. For older versions of the editor a workaround is to use the `WriteTo.UnityDebugLog` sink at the cost of a negative performance impact.
-* You can’t log into the Editor Console while running a player.
+* Context highlighting (the possibility of clicking on a log line and selecting the game object that emitted it) is not functional. There is no workaround for this limitation as the logging package is not meant to be used for local iteration in the editor.
