@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.0] - 2024-03-22
+
+### Changed
+*Release Preparation
+
+
 ## [1.2.0-pre.12] - 2024-02-13
 
 ### Changed
