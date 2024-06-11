@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.3.0-exp.1] - 2024-06-11
+
+### Changed
+* Updated entities packages dependencies
+
+
 ## [1.2.3] - 2024-05-30
 
 ### Changed
@@ -15,7 +21,7 @@
 ## [1.2.0] - 2024-03-22
 
 ### Changed
-* Release Preparation
+*Release Preparation
 
 
 ## [1.2.0-pre.12] - 2024-02-13
