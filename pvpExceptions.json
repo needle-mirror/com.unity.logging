@@ -1,0 +1,87 @@
+{
+  "exempts": {
+    "PVP-25-1": {
+      "errors": [
+        "Runtime/SourceGenerators/LoggingCommon.dll",
+        "Runtime/SourceGenerators/MainLoggingGenerator.dll"
+      ]
+    },
+    "PVP-41-1": {
+      "errors": [
+        "CHANGELOG.md: line 3: Unreleased section is not allowed for public release"
+      ]
+    },
+    "PVP-150-1": {
+      "errors": [
+        "Unity.Logging.BurstHelper: IsManaged: unexpected <returns>; use <value> instead",
+        "Unity.Logging.BurstHelper: IsBurst: unexpected <returns>; use <value> instead",
+        "Unity.Logging.DispatchQueue: empty <para> tag",
+        "Unity.Logging.DispatchQueue: mixed block and inline content in <summary>; wrap inline content in <para>",
+        "Unity.Logging.Sinks.FileRollingLogic<T>: empty <typeparam> tag",
+        "Unity.Logging.Sinks.FileSinkSystem.GeneralSinkConfiguration: GeneralSinkConfiguration JsonArray(): text or XML content outside a top-level tag",
+        "Unity.Logging.Sinks.FileSinkSystem.GeneralSinkConfiguration: GeneralSinkConfiguration JsonLines(): text or XML content outside a top-level tag",
+        "Unity.Logging.BurstStringWrapper: bool IsEmpty(string): empty <param> tag",
+        "Unity.Logging.FormatterStruct: UseText: unexpected <returns>; use <value> instead",
+        "Unity.Logging.IFormatter: bool WriteChild(ref UnsafeText, string, ref T, ref LogMemoryManager, ref ArgumentInfo, int): empty <param> tag",
+        "Unity.Logging.LogController: MemoryManager: <seealso> in block context; use <see> instead",
+        "Unity.Logging.LogController: DispatchQueue: <seealso> in block context; use <see> instead",
+        "Unity.Logging.LogController: LogContextWithDecorator BeginEditDecoratePayloadHandles(in LogControllerScopedLock, out int): empty <para> tag",
+        "Unity.Logging.LogController: LogContextWithDecorator BeginEditDecoratePayloadHandles(in LogControllerScopedLock, out int): <seealso> in block context; use <see> instead",
+        "Unity.Logging.LogController: LogContextWithDecorator BeginEditDecoratePayloadHandles(in LogControllerScopedLock, out int): mixed block and inline content in <summary>; wrap inline content in <para>",
+        "Unity.Logging.LogController: FixedList64Bytes<PayloadHandle> EndEditDecoratePayloadHandles(ref LogController, int): empty <para> tag",
+        "Unity.Logging.LogController: FixedList64Bytes<PayloadHandle> EndEditDecoratePayloadHandles(ref LogController, int): <seealso> in block context; use <see> instead",
+        "Unity.Logging.LogController: FixedList64Bytes<PayloadHandle> EndEditDecoratePayloadHandles(ref LogController, int): mixed block and inline content in <summary>; wrap inline content in <para>",
+        "Unity.Logging.LogController: void AddDecorateHandler(FunctionPointer<OutputWriterDecorateHandler>): <seealso> in block context; use <see> instead",
+        "Unity.Logging.LogController: void RemoveDecorateHandler(FunctionPointer<OutputWriterDecorateHandler>): <seealso> in block context; use <see> instead",
+        "Unity.Logging.LogController.SinkStruct: bool IsInterestedIn(ref LogMessage): text or XML content outside a top-level tag",
+        "Unity.Logging.LogDecorateScope: mixed block and inline content in <remarks>; wrap inline content in <para>",
+        "Unity.Logging.LogDecorateScope: .ctor(LogControllerScopedLock, FixedList64Bytes<PayloadHandle>): <seealso> in block context; use <see> instead",
+        "Unity.Logging.Logger: bool HasSinksFor(LogLevel): empty <param> tag",
+        "Unity.Logging.LoggerHandle: void MustBeValid(): <seealso> in block context; use <see> instead",
+        "Unity.Logging.LoggerMinimumLevelConfig: LoggerConfig Set(LogLevel): empty <param> tag",
+        "Unity.Logging.LoggerSyncModeConfig: LoggerConfig Set(SyncMode): empty <param> tag",
+        "Unity.Logging.LogMemoryManagerParameters: IsOverflowBufferEnabled: <seealso> in block context; use <see> instead",
+        "Unity.Logging.LogMemoryManager: void Update(): <seealso> in inline context; use <see> instead",
+        "Unity.Logging.LogMemoryManager: void Update(): mixed block and inline content in <summary>; wrap inline content in <para>",
+        "Unity.Logging.PayloadHandle: IsValid: unexpected <returns>; use <value> instead",
+        "Unity.Logging.PayloadHandle: IsDisjointedBuffer: empty <returns> tag",
+        "Unity.Logging.PayloadHandle: IsDisjointedBuffer: unexpected <returns>; use <value> instead",
+        "Unity.Logging.Sinks.SinkSystemBase: void Initialize(Logger, SinkConfiguration): suspicious '///' triple-slash inside XmlDoc comment",
+        "Unity.Logging.Sinks.SinkSystemBase: void Initialize(Logger, SinkConfiguration): text or XML content outside a top-level tag",
+        "Unity.Logging.Builder: UnsafeText CreateText__Unmanaged(byte*, int, Allocator): suspicious '///' triple-slash inside XmlDoc comment",
+        "Unity.Logging.Builder: UnsafeText CreateText__Unmanaged(byte*, int, Allocator): text or XML content outside a top-level tag",
+        "Unity.Logging.Builder: PayloadHandle BuildMessage__Unmanaged(byte*, int, ref LogMemoryManager): suspicious '///' triple-slash inside XmlDoc comment",
+        "Unity.Logging.Builder: PayloadHandle BuildMessage__Unmanaged(byte*, int, ref LogMemoryManager): text or XML content outside a top-level tag"
+      ]
+    },
+    "PVP-151-1": {
+      "errors": [
+        "Unity.Logging.Sinks.OnBeforeSinkDelegate.Delegate: missing <param name=\"userData\">",
+        "Unity.Logging.Sinks.OnAfterSinkDelegate.Delegate: missing <param name=\"userData\">",
+        "Unity.Logging.Sinks.OnDisposeDelegate.Delegate: missing <param name=\"userData\">",
+        "Unity.Logging.Sinks.OnLogMessageEmitDelegate.Delegate: missing <param name=\"logEvent\">",
+        "Unity.Logging.Sinks.OnLogMessageEmitDelegate.Delegate: missing <param name=\"outTemplate\">",
+        "Unity.Logging.Sinks.OnLogMessageEmitDelegate.Delegate: missing <param name=\"messageBuffer\">",
+        "Unity.Logging.Sinks.OnLogMessageEmitDelegate.Delegate: missing <param name=\"memoryManager\">",
+        "Unity.Logging.Sinks.OnLogMessageEmitDelegate.Delegate: missing <param name=\"userData\">",
+        "Unity.Logging.Sinks.OnLogMessageEmitDelegate.Delegate: missing <param name=\"allocator\">",
+        "Unity.Logging.Sinks.OnLogMessageFormatterDelegate.Delegate: missing <param name=\"logEvent\">",
+        "Unity.Logging.Sinks.OnLogMessageFormatterDelegate.Delegate: missing <param name=\"formatter\">",
+        "Unity.Logging.Sinks.OnLogMessageFormatterDelegate.Delegate: missing <param name=\"outTemplate\">",
+        "Unity.Logging.Sinks.OnLogMessageFormatterDelegate.Delegate: missing <param name=\"messageBuffer\">",
+        "Unity.Logging.Sinks.OnLogMessageFormatterDelegate.Delegate: missing <param name=\"memoryManager\">",
+        "Unity.Logging.Sinks.OnLogMessageFormatterDelegate.Delegate: missing <param name=\"userData\">",
+        "Unity.Logging.Sinks.OnLogMessageFormatterDelegate.Delegate: missing <param name=\"allocator\">",
+        "Unity.Logging.Sinks.OnLogMessageFormatterDelegate.Delegate: missing <returns>",
+        "Unity.Logging.LogWriterUtils.OutputWriterTimestampHandler: missing <returns>",
+        "Unity.Logging.LogWriterUtils.OutputWriterLevelHandler: missing <returns>",
+        "Unity.Logging.DotsRuntimePrintWrapper: undocumented",
+        "Unity.Logging.DotsRuntimePrintWrapper: void BeginBatchConsoleWrite(): undocumented",
+        "Unity.Logging.DotsRuntimePrintWrapper: void EndBatchConsoleWrite(): undocumented",
+        "Unity.Logging.DotsRuntimePrintWrapper: void Flush(): undocumented",
+        "Unity.Logging.DotsRuntimePrintWrapper: void ConsoleWrite(byte*, int, byte): undocumented",
+        "Unity.Logging.DotsRuntimePrintWrapper: void ConsoleWrite(FixedString512Bytes): undocumented"
+      ]
+    }
+  }
+}

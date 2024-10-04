@@ -1,13 +1,10 @@
 # Changelog
-## [1.3.2] - 2024-09-06
+
+## [1.3.4] - 2024-10-04
 
 ### Changed
 * Updated entities packages dependencies
-
-
-### Changed
-* Updated Burst dependency to version 1.8.17
-
+* Updated Burst dependency to version 1.8.18
 
 ## [1.3.0-pre.4] - 2024-07-17
 
