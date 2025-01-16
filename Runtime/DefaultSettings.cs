@@ -30,8 +30,8 @@ namespace Unity.Logging
                     .MinimumLevel.Debug()
                     .CaptureStacktrace()
                     .OutputTemplate("[{Timestamp}] {Level} | {Message}{NewLine}{Stacktrace}")
-// Switch file system is not writable from the Unity Runtime
-#if !PLATFORM_SWITCH
+// Switch and iOS file system is not writable from the Unity Runtime
+#if !PLATFORM_SWITCH && !UNITY_IOS && !UNITY_TVOS && !UNITY_VISIONOS
                     .WriteTo.File(GetLogFilePath())
                     .WriteTo.JsonFile(GetJsonLogFilePath())
 #endif

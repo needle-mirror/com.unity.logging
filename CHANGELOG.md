@@ -1,10 +1,29 @@
 # Changelog
 
+## [1.3.5] - 2025-01-16
+
+### Fixed
+
+* Addressed an issue on Unity 6 and iOS where having the package installed would cause an exception at startup on player builds. An effect of this fix is that log files are no longer produced by default on iOS. This can be overridden through a custom logger configuration (see `DefaultSettings.CreateDefaultLogger`).
+
+
+
 ## [1.3.4] - 2024-10-04
 
 ### Changed
 * Updated entities packages dependencies
 * Updated Burst dependency to version 1.8.18
+
+
+## [1.3.2] - 2024-09-06
+
+### Changed
+* Updated entities packages dependencies
+
+
+### Changed
+* Updated Burst dependency to version 1.8.17
+
 
 ## [1.3.0-pre.4] - 2024-07-17
 
