@@ -1,11 +1,17 @@
 # Changelog
 
+## [1.3.6] - 2025-02-17
+
+### Fixed
+
+* Fixed special characters (like newlines) not being escaped properly in JSON properties.
+
+
 ## [1.3.5] - 2025-01-16
 
 ### Fixed
 
 * Addressed an issue on Unity 6 and iOS where having the package installed would cause an exception at startup on player builds. An effect of this fix is that log files are no longer produced by default on iOS. This can be overridden through a custom logger configuration (see `DefaultSettings.CreateDefaultLogger`).
-
 
 
 ## [1.3.4] - 2024-10-04

@@ -410,10 +410,20 @@ namespace Unity.Logging
                       output.Append(':') == FormatError.None;
             }
 
-            return output.Append('"') == FormatError.None &&
-                   Unity.Logging.Builder.AppendStringAsPayloadHandle(ref output, payload, ref memAllocator) &&
-                   output.Append('"') == FormatError.None &&
-                   res;
+            unsafe
+            {
+                if (memAllocator.RetrievePayloadBuffer(payload, out var buffer))
+                {
+                    res = output.Append('"') == FormatError.None && res;
+
+                    var bufferPtr = (byte*)NativeArrayUnsafeUtility.GetUnsafeBufferPointerWithoutChecks(buffer);
+                    JsonWriter.AppendEscapedJsonString(ref output, bufferPtr + UnsafeUtility.SizeOf<int>(), *(int*)bufferPtr);
+
+                    return output.Append('"') == FormatError.None && res;
+                }
+            }
+
+            return false;
         }
 
         /// <inheritdoc cref="IFormatter.WriteProperty{T}(ref UnsafeText, string, in T, ref ArgumentInfo)"/>
@@ -446,9 +456,9 @@ namespace Unity.Logging
             if (UseText)
                 return output.Append(ptr, lengthBytes) == FormatError.None;
 
-            return output.Append('"') == FormatError.None &&
-                   output.Append(ptr, lengthBytes) == FormatError.None &&
-                   output.Append('"') == FormatError.None;
+            var res = output.Append('"') == FormatError.None;
+            JsonWriter.AppendEscapedJsonString(ref output, ptr, lengthBytes);
+            return res && output.Append('"') == FormatError.None;
         }
 
         /// <inheritdoc cref="IFormatter.BeforeObject"/>
