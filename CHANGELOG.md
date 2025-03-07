@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0-exp.2] - 2025-03-07
+
+### Changed
+
+* Updated the `com.unity.burst` dependency to version `1.8.19`
+
+
 ## [1.3.6] - 2025-02-17
 
 ### Fixed
