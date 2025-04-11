@@ -1,12 +1,12 @@
 {
   "name": "com.unity.logging",
   "displayName": "Unity Logging",
-  "version": "1.3.6",
+  "version": "1.3.10",
   "unity": "2022.3",
-  "unityRelease": "11f1",
+  "unityRelease": "20f1",
   "dependencies": {
-    "com.unity.burst": "1.8.18",
-    "com.unity.collections": "2.5.3"
+    "com.unity.burst": "1.8.19",
+    "com.unity.collections": "2.5.7"
   },
   "relatedPackages": {
     "com.unity.logging.tests": "1.0.0"
@@ -18,16 +18,16 @@
     "unity"
   ],
   "_upm": {
-    "changelog": "### Fixed\n\n* Fixed special characters (like newlines) not being escaped properly in JSON properties."
+    "changelog": "### Changed\n\n* Updated the `com.unity.entities` dependency to version `1.3.14`\n* Updated the `com.unity.burst` dependency to version `1.8.19`\n* The minimum supported editor version is now 2022.3.20f1"
   },
   "upmCi": {
-    "footprint": "714272266ae0e13f32da3ba68869ba310501c699"
+    "footprint": "4497980f61b940bc18abaf138fac60a51386cf94"
   },
   "documentationUrl": "https://docs.unity3d.com/Packages/com.unity.logging@1.3/manual/index.html",
   "repository": {
     "url": "https://github.cds.internal.unity3d.com/unity/dots.git",
     "type": "git",
-    "revision": "893d3250e4978302326a812dde13aa126dbcd775"
+    "revision": "2520fc806449bf4c278c9031eb21f0a6aeccda46"
   },
   "samples": [
     {

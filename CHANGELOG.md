@@ -1,10 +1,21 @@
 # Changelog
 
+
+## [1.3.10] - 2025-04-11
+
+### Changed
+
+* Updated the `com.unity.entities` dependency to version `1.3.14`
+* Updated the `com.unity.burst` dependency to version `1.8.19`
+* The minimum supported editor version is now 2022.3.20f1
+
+
 ## [1.3.6] - 2025-02-17
 
 ### Fixed
 
 * Fixed special characters (like newlines) not being escaped properly in JSON properties.
+
 
 
 ## [1.3.5] - 2025-01-16
